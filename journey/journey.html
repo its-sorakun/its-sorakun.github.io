@@ -63,40 +63,33 @@
             </button>
         </header>
 
-        <!-- Coming Soon Section -->
-        <main class="flex flex-col items-center text-center py-8 sm:py-12">
-
+        <!-- Main Content -->
+        <main class="flex flex-col text-left py-4 sm:py-8">
             <!-- Anime Image -->
-            <div class="mb-8 relative">
-                <img src="/images/please_wait.png" alt="Please wait" class="w-56 sm:w-72 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 hover:scale-105 transition-transform duration-300">
+            <div class="mb-10 w-full flex justify-center">
+                <img src="/images/genshin_qiqi.png" alt="Qiqi" class="w-64 sm:w-80 hover:scale-105 transition-transform duration-300">
             </div>
 
             <!-- Japanese heading -->
-            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white tracking-tight mb-3">
-                少々お待ちください。
+            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white tracking-tight mb-2 text-center sm:text-left">
+                私の旅
             </h1>
-            <p class="text-sm sm:text-base text-gray-500 dark:text-gray-400 font-mono mb-6">
-                Shōshō omachi kudasai. (Please wait a moment.)
+            <p class="text-sm sm:text-base text-gray-500 dark:text-gray-400 font-mono mb-8 text-center sm:text-left">
+                Watashi no tabi. (My Journey)
             </p>
 
-            <!-- Status message -->
-            <div class="max-w-md text-sm sm:text-base leading-relaxed text-gray-600 dark:text-gray-400 space-y-3 mb-8">
+            <!-- Content section -->
+            <section class="space-y-6 sm:space-y-8 text-sm sm:text-base leading-relaxed sm:leading-loose text-gray-700 dark:text-gray-300">
+                <p class="first-letter:text-5xl first-letter:font-bold first-letter:text-blue-600 dark:first-letter:text-blue-400 first-letter:mr-3 first-letter:float-left">
+                    <span class="font-medium text-gray-900 dark:text-white">Like Qiqi gathering herbs,</span> my journey in the tech world has been a continuous process of collecting knowledge. From modifying Android systems during the Gingerbread era to understanding the deep intricacies of operating systems, every step has been an exploration.
+                </p>
                 <p>
-                    この旅はまだ書いています。<br>
-                    <span class="text-xs font-mono text-gray-400 dark:text-gray-500">Kono tabi wa mada kaite imasu.</span>
+                    I started by compiling custom ROMs and kernels, learning how different pieces of open-source software fit together to build a functional environment. Over time, that curiosity naturally extended into networking, cybersecurity, and finding vulnerabilities that led me down the rabbit hole of bug bounty hunting.
                 </p>
-                <p class="text-gray-700 dark:text-gray-300">
-                    This page is currently being written. My journey — from tinkering with Android ROMs at age nine to where I am today — deserves more than a blank page. Check back soon.
+                <p>
+                    Today, I continue to explore the depths of low-level computing, DevOps practices, and AI. This page will feature a detailed timeline of my technical milestones, experiences, and the various projects that shaped my engineering perspective over the years.
                 </p>
-            </div>
-
-            <!-- Tag pill -->
-            <span class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 shadow-sm">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                工事中 — Under Construction
-            </span>
+            </section>
         </main>
 
     </div>
