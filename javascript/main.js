@@ -5,6 +5,8 @@ tailwind.config = {
         extend: {
             fontFamily: {
                 sans: ['Inter', 'sans-serif'],
+            'inter': ['Inter', 'sans-serif'],
+            'syne': ['Syne', 'sans-serif'],
             },
         }
     }
