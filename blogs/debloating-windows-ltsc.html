@@ -1,0 +1,429 @@
+<!-- Implementation details: Blog article documenting the technical motivations, subsystem investigations, and lessons learned from manually debloating Windows 10 LTSC on an Acer Nitro 5. -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debloating an Already "Debloated" Windows: My Windows 10 LTSC Setup - ブログ (Blogs) | SoraKun</title>
+    <link rel="icon" type="image/png" href="/images/11-1.png">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Tailwind config + Dark mode init -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        };
+
+        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/css/style.css">
+
+    <meta name="description" content="Why and how I manually debloated an already debloated Windows 10 LTSC installation on modern hardware.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://sorakun.is-a.dev/blogs/debloating-windows-ltsc.html">
+    <meta property="og:title" content="Debloating an Already 'Debloated' Windows: My Windows 10 LTSC Setup | SoraKun">
+    <meta property="og:description" content="A technical deep-dive into manually dissecting Windows 10 LTSC subsystems, update remediation, and service dependencies.">
+    <meta property="og:image" content="https://sorakun.is-a.dev/images/columbina.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@sorakun_sensei">
+    <meta name="twitter:title" content="Debloating an Already 'Debloated' Windows: My Windows 10 LTSC Setup | SoraKun">
+    <meta name="twitter:description" content="A technical deep-dive into manually dissecting Windows 10 LTSC subsystems, update remediation, and service dependencies.">
+    <meta name="twitter:image" content="https://sorakun.is-a.dev/images/columbina.jpg">
+</head>
+
+<body
+    class="bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-300 antialiased min-h-screen flex flex-col">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12 w-full flex-grow">
+
+        <!-- Header -->
+        <header class="grid grid-cols-[1fr_auto] gap-y-5 items-start sm:items-center mb-10 sm:mb-16">
+            <nav class="col-span-2 sm:col-span-1 row-start-2 sm:row-start-1 w-full sm:w-auto">
+                <ul class="flex flex-wrap justify-center sm:justify-start gap-x-4 gap-y-3 sm:gap-6 text-sm font-medium">
+                    <li>
+                        <a href="/"
+                            class="flex items-center hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6">
+                                </path>
+                            </svg>
+                            ホーム (home)
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/journey/journey.html"
+                            class="flex items-center hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7">
+                                </path>
+                            </svg>
+                            旅 (journey)
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/blogs/blogs.html"
+                            class="flex items-center hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z">
+                                </path>
+                            </svg>
+                            ブログ (blog)
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/projects/projects.html"
+                            class="flex items-center hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z">
+                                </path>
+                            </svg>
+                            プロジェクト (projects)
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+
+            <!-- Dark Mode Toggle Button -->
+            <div class="col-span-2 sm:col-span-1 row-start-1 sm:row-start-1 flex justify-end w-full sm:w-auto">
+                <button id="theme-toggle" type="button" aria-label="Toggle dark mode"
+                    class="text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-300 dark:focus:ring-gray-700 rounded-lg text-sm p-2 transition-colors">
+                    <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+                    </svg>
+                    <svg id="theme-toggle-light-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path
+                            d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"
+                            fill-rule="evenodd" clip-rule="evenodd"></path>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex flex-col text-left py-4 sm:py-8">
+            <!-- Article Title -->
+            <h1 class="font-syne text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white tracking-tight mb-4 text-center sm:text-left leading-tight">
+                Debloating an Already "Debloated" Windows: My Windows 10 LTSC Setup
+            </h1>
+
+            <!-- Meta info -->
+            <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 font-mono mb-8 text-center sm:text-left">
+                Windows Internals • System Surgery • Personal Reflections
+            </p>
+
+            <!-- Content section -->
+            <article class="space-y-6 sm:space-y-8 text-sm sm:text-base leading-relaxed sm:leading-loose text-gray-700 dark:text-gray-300">
+
+                <p>
+                    Windows 10 Enterprise LTSC (Long-Term Servicing Channel) is widely considered the cleanest official edition of Windows. It ships without consumer store bloatware, without pre-installed mobile games, and without aggressive bi-annual feature overhauls that constantly redesign the desktop. For most people looking for a lightweight Windows experience, installing LTSC is the finish line.
+                </p>
+
+                <p>
+                    For me, it was only the baseline. Even on LTSC, Windows remains an operating system with layers of background telemetry, scheduled maintenance tasks, and self-healing mechanisms designed to keep Microsoft in the driver's seat. Rather than treating the OS as an untouchable black box, I wanted to see how far I could take system control—investigating, trimming, and manually modifying an already stripped-down OS to fit my exact requirements.
+                </p>
+
+                <!-- Section: The Hardware & Starting Point -->
+                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
+                    1. The Hardware &amp; Starting Point
+                </h2>
+
+                <p>
+                    The machine running this setup is an <strong>Acer Nitro 5 (AN515-47)</strong>:
+                </p>
+
+                <ul class="list-disc list-inside space-y-1 font-mono text-xs sm:text-sm pl-2">
+                    <li>CPU: AMD Ryzen 5 7535HS (Zen 3+, 6C / 12T)</li>
+                    <li>iGPU: AMD Radeon 660M</li>
+                    <li>Dedicated GPU: NVIDIA GeForce RTX 3050 Laptop (4GB VRAM)</li>
+                    <li>RAM: 16GB DDR5 4800 MT/s</li>
+                    <li>Storage: 512GB SK Hynix NVMe SSD (OS) + 1TB Crucial NVMe SSD (Storage)</li>
+                    <li>Operating System: Windows 10 Enterprise LTSC (Build 19044)</li>
+                </ul>
+
+                <p>
+                    Because this laptop launched in the Windows 11 era, Acer provided no official Windows 10 driver package. Setting it up meant obtaining clean platform drivers directly from AMD and NVIDIA, testing GPU power switching, and ensuring the modern Rembrandt-R platform worked stably under an older operating system release. Once stable, the real experiment began.
+                </p>
+
+                <!-- Section: Why Manual Modifications over Scripts -->
+                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
+                    2. Why Manual Modifications Over One-Click Scripts
+                </h2>
+
+                <p>
+                    The internet is full of "Windows debloater" scripts and custom pre-modified ISOs. I actively avoided them. 
+                </p>
+
+                <p>
+                    Running a massive, opaque PowerShell script that disables 150 services and deletes hundreds of registry keys in one pass is reckless. When an audio driver stops responding, a network adapter drops connections, or an installer crashes two months later, tracing which toggle caused the failure is nearly impossible. 
+                </p>
+
+                <p>
+                    My goal wasn't just to make numbers in Task Manager smaller; it was to understand <em>why</em> each component exists, what it talks to, and what happens when it goes missing. I chose to examine services individually via <code class="text-xs bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-blue-600 dark:text-blue-400 font-mono">services.msc</code>, inspect registry keys under <code class="text-xs bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-blue-600 dark:text-blue-400 font-mono">HKLM</code>, and use the <code class="text-xs bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-blue-600 dark:text-blue-400 font-mono">.bak</code> renaming technique on executables so changes could be traced and reversed.
+                </p>
+
+                <!-- Section: The War with Windows Update Self-Healing -->
+                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
+                    3. The War with Windows Update &amp; Self-Healing
+                </h2>
+
+                <p>
+                    Disabling Windows Update turned out to be the most persistent technical battle. 
+                </p>
+
+                <p>
+                    The standard assumption is that setting <code class="text-xs bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-blue-600 dark:text-blue-400 font-mono">wuauserv</code> to Disabled in the Services console stops updates. On modern Windows, that is an illusion. Windows has an entire redundancy framework designed to revive its update pipeline:
+                </p>
+
+                <ul class="list-disc list-inside space-y-2 text-sm pl-2">
+                    <li><strong class="font-semibold text-gray-900 dark:text-white">wuauserv:</strong> The core Windows Update service.</li>
+                    <li><strong class="font-semibold text-gray-900 dark:text-white">UsoSvc:</strong> The Update Orchestrator Service that coordinates downloads and schedules reboots.</li>
+                    <li><strong class="font-semibold text-gray-900 dark:text-white">WaaSMedicSvc:</strong> The Windows Update Medic Service, specifically built to detect if <code class="text-xs font-mono">wuauserv</code> has been tampered with or disabled, and silently repair its configuration.</li>
+                </ul>
+
+                <p>
+                    After disabling these services, I observed that Windows would periodically re-enable them after reboots or idle intervals. That led to investigating the persistence triggers deeper inside the system:
+                </p>
+
+                <div class="p-5 rounded-2xl bg-white dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 space-y-3 text-sm">
+                    <p class="font-mono text-xs text-blue-600 dark:text-blue-400 font-semibold">THE REMEDIATION ESCALATION</p>
+                    <p>
+                        <strong>1. Renaming Orchestrator Executables:</strong> In <code class="text-xs font-mono">C:\Windows\System32</code>, renamed <code class="text-xs font-mono">UsoClient.exe</code> and <code class="text-xs font-mono">usocoreworker.exe</code> to append <code class="text-xs font-mono">.bak</code>, preventing them from being invoked by background triggers.
+                    </p>
+                    <p>
+                        <strong>2. Neutering Remediation Binaries:</strong> Renamed <code class="text-xs font-mono">upfc.exe</code> (Update OS Component) to <code class="text-xs font-mono">upfc.exe.bak</code> after investigating its role in background self-healing routines.
+                    </p>
+                    <p>
+                        <strong>3. Purging TaskCache Metadata:</strong> When Task Scheduler refused to let me disable Update Orchestrator tasks—and the tasks didn't even have visible XML definitions under <code class="text-xs font-mono">System32\Tasks</code>—I traced them to the internal registry tree:
+                        <br/>
+                        <code class="text-xs bg-gray-100 dark:bg-gray-700/60 px-1 py-0.5 rounded font-mono text-blue-600 dark:text-blue-400 break-all">HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\UpdateOrchestrator</code>
+                        <br/>
+                        Deleting that registry entry removed the internal metadata Task Scheduler used to trigger the orchestration tasks.
+                    </p>
+                </div>
+
+                <!-- Section: Shell Surgery & Dependency-Aware Trimming -->
+                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
+                    4. Shell Surgery &amp; Dependency-Aware Trimming
+                </h2>
+
+                <p>
+                    Another area I wanted to streamline was the modern Windows shell. I don't use the Windows 10 UWP Start menu or Cortana-integrated web search; I prefer a clean, instant, keyboard-driven launcher.
+                </p>
+
+                <p>
+                    I installed <strong>Open-Shell</strong>, configured it to my preferences, and then neutralized the default shell host containers by appending <code class="text-xs font-mono">.bak</code> to their system app package folders:
+                </p>
+
+                <ul class="list-disc list-inside space-y-1 font-mono text-xs sm:text-sm pl-2">
+                    <li><code class="text-xs">Microsoft.Windows.StartMenuExperienceHost</code></li>
+                    <li><code class="text-xs">Microsoft.Windows.Search</code></li>
+                    <li><code class="text-xs">Microsoft.Windows.PeopleExperienceHost</code></li>
+                    <li><code class="text-xs">Microsoft.XboxGameCallableUI</code></li>
+                </ul>
+
+                <p>
+                    Crucially, this wasn't blind removal. Consider <strong>Microsoft Edge</strong>: I wanted the Edge browser gone from my desktop, but I knew desktop apps like <strong>Stremio</strong> rely on the embedded <strong>WebView2</strong> runtime for interface rendering. Completely ripping out all Edge-related components breaks any application that relies on an embedded browser control. So I removed the standalone Edge browser application while carefully preserving the WebView runtime. Understanding dependencies prevents a trimmed system from turning into a broken system.
+                </p>
+
+                <!-- Section: When Things Broke: The sppsvc Incident -->
+                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
+                    5. When Things Broke: The Software Protection Incident
+                </h2>
+
+                <p>
+                    A real tinkering journey includes mistakes, and this was one of the most instructive ones.
+                </p>
+
+                <p>
+                    While auditing running services, I noticed <code class="text-xs font-mono">sppsvc</code> (Software Protection). Wondering if it was generating background telemetry or unneeded checks, I disabled it.
+                </p>
+
+                <p>
+                    The next morning, the consequences hit: desktop personalization settings were disabled, and the dreaded <em>"Activate Windows"</em> watermark appeared in the corner of the screen. When I opened Services to turn it back on, Windows threw <strong>Error 1058</strong>: <em>"The service cannot be started, either because it is disabled or because it has no enabled devices associated with it."</em>
+                </p>
+
+                <p>
+                    I didn't panic or reinstall. I started investigating. Running <code class="text-xs font-mono">sc qc sppsvc</code> showed the service binary was intact (<code class="text-xs font-mono">sppsvc.exe</code>), running under <code class="text-xs font-mono">NT AUTHORITY\NetworkService</code> with a delayed auto-start configuration. Exploring <code class="text-xs font-mono">System32</code> led to <code class="text-xs font-mono">slmgr.vbs</code>, <code class="text-xs font-mono">slui.exe</code>, and the licensing definitions inside <code class="text-xs font-mono">slmgr.ini</code>.
+                </p>
+
+                <p>
+                    Dissecting <code class="text-xs font-mono">slmgr.ini</code> revealed how Windows handles license tokens, grace periods, notification states, and validation calls. The Software Protection service wasn't a telemetry daemon; it was the foundational licensing authority of the operating system. I re-enabled its startup entry directly via the registry, restarted the laptop, and the service initialized cleanly, clearing the watermark and restoring personalization. Breaking it taught me more about Windows licensing mechanics than reading ten official documentation pages ever could.
+                </p>
+
+                <!-- Section: Empirical Observations vs Placebos -->
+                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
+                    6. Empirical Observations vs. Placebos
+                </h2>
+
+                <p>
+                    One of the core rules of system optimization is testing your assumptions against real data. Two experiments in particular stood out:
+                </p>
+
+                <div class="space-y-4">
+                    <div class="p-5 rounded-2xl bg-white dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 space-y-2 text-sm">
+                        <h3 class="font-bold text-gray-900 dark:text-white text-base">The SysMain Test (A Valuable Negative Result)</h3>
+                        <p>
+                            Online guides frequently demand that users disable <code class="text-xs font-mono">SysMain</code> (formerly SuperFetch). I disabled it, tested everyday workflows, and found <strong>zero noticeable difference</strong>. On a machine with a fast SK Hynix NVMe SSD and 16GB of DDR5 memory, preloading algorithms have a negligible impact on desktop responsiveness. Disabling a service just because you can doesn't mean it makes the machine faster.
+                        </p>
+                    </div>
+
+                    <div class="p-5 rounded-2xl bg-white dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 space-y-2 text-sm">
+                        <h3 class="font-bold text-gray-900 dark:text-white text-base">The Mem Reduct Illusion: Working Sets vs. Committed Memory</h3>
+                        <p>
+                            I tested a memory-cleaning tool (Mem Reduct) and watched the "In Use" RAM counter in Task Manager plummet from ~2.5GB down to 1.0GB. It looked impressive on the surface, but looking at Process Explorer revealed the truth: <strong>Committed Memory remained unchanged at 4.0GB</strong>.
+                        </p>
+                        <p>
+                            The tool simply forced working set pages out of physical RAM and into the pagefile on disk. The virtual allocations were still committed. Forcing RAM clearing on modern hardware just forces the OS to read pages back from storage when an application needs them again. Understanding private bytes and commit charge prevents falling for UI cosmetic illusions.
+                        </p>
+                    </div>
+                </div>
+
+                <p>
+                    By pruning optional background services (including non-essential NVIDIA telemetry/helper services while preserving the core display driver), the system settled into an idle footprint of approximately <strong>57 processes, 896 threads, and ~1.5GB of RAM</strong> (with Fast Startup permanently disabled).
+                </p>
+
+                <!-- Section: The Takeaway -->
+                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
+                    7. The Takeaway
+                </h2>
+
+                <p>
+                    Taking control of Windows at this level is not about chasing an extra 2 FPS in a video game. It's about demystifying an operating system that most people treat as an unchangeable monolith.
+                </p>
+
+                <p>
+                    Windows is an intricate web of interconnected subsystems. If you choose to take it apart manually, you have to accept the trade-offs: components won't update automatically, servicing becomes manual, and when something breaks, you have to be willing to open <code class="text-xs font-mono">regedit</code>, read event logs, and trace the cause yourself.
+                </p>
+
+                <p>
+                    For me, that process of breaking, diagnosing, and understanding the machinery beneath the interface is what makes personal computing genuinely fun.
+                </p>
+
+                <div class="pt-6 border-t border-gray-200 dark:border-gray-800 flex flex-wrap justify-between items-center text-sm">
+                    <a href="blogs.html" class="inline-flex items-center text-blue-600 dark:text-blue-400 hover:underline">
+                        &larr; Back to all posts
+                    </a>
+                    <a href="technical-specifications.html" class="inline-flex items-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
+                        Technical Specifications &rarr;
+                    </a>
+                </div>
+
+            </article>
+        </main>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 w-full">
+        <footer class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-800 pb-8">
+            <nav>
+                <ul class="flex flex-wrap justify-center sm:justify-start gap-x-5 gap-y-4 sm:gap-6 text-sm font-medium">
+                    <li>
+                        <a href="https://github.com/its-sorakun" target="_blank" rel="noopener noreferrer"
+                            class="flex items-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
+                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path fill-rule="evenodd"
+                                    d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
+                                    clip-rule="evenodd"></path>
+                            </svg>
+                            GitHub
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://t.me/sorakun_sh" target="_blank" rel="noopener noreferrer"
+                            class="flex items-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
+                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                <path
+                                    d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z">
+                                </path>
+                            </svg>
+                            Telegram
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://x.com/sorakun_sensei" target="_blank" rel="noopener noreferrer"
+                            class="flex items-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
+                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path
+                                    d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z">
+                                </path>
+                            </svg>
+                            X
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://discordapp.com/users/sorakun.senpai" target="_blank" rel="noopener noreferrer"
+                            class="flex items-center text-gray-500 hover:text-[#5865F2] dark:text-gray-400 dark:hover:text-white transition-colors">
+                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                <path fill-rule="evenodd" clip-rule="evenodd"
+                                    d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.174 15.11c-.93.682-1.82 1.095-2.701 1.37a.04.04 0 0 1-.046-.022 8.76 8.76 0 0 1-.553-.9c-.013-.02-.003-.047.018-.057c.563-.216 1.102-.497 1.616-.843a.044.044 0 0 0 .004-.07c-.113-.086-.227-.178-.335-.272a.042.042 0 0 0-.044-.006c-3.003 1.385-6.262 1.385-9.232 0a.04.04 0 0 0-.045.006c-.108.094-.222.186-.335.272a.042.042 0 0 0 .004.07c.514.346 1.053.627 1.617.843c.02.01.03.037.017.057c-.17.31-.358.61-.553.9a.042.042 0 0 1-.047.022c-.88-.275-1.77-.688-2.7-1.37a.038.038 0 0 1-.016-.037c.435-4.148 1.573-7.447 3.424-10.428a.046.046 0 0 1 .022-.018c1.36-.54 2.65-.85 3.92-.916a.047.047 0 0 1 .043.023c.168.307.354.704.484 1.012a14.28 14.28 0 0 1 4.131 0c.13-.308.316-.705.484-1.012a.045.045 0 0 1 .043-.023c1.27.067 2.56.377 3.92.916a.041.041 0 0 1 .022.018c1.85 2.98 2.99 6.28 3.424 10.428A.04.04 0 0 1 17.174 15.11zM9.13 11.23c-.722 0-1.304.664-1.304 1.478s.582 1.477 1.304 1.477c.723 0 1.305-.663 1.305-1.477s-.573-1.478-1.305-1.478zm5.74 0c-.722 0-1.304.664-1.304 1.478s.582 1.477 1.304 1.477c.723 0 1.305-.663 1.305-1.477s-.573-1.478-1.305-1.478z">
+                                </path>
+                            </svg>
+                            Discord
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </footer>
+    </div>
+
+    <!-- Theme Toggle Script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const darkIcon = document.getElementById('theme-toggle-dark-icon');
+            const lightIcon = document.getElementById('theme-toggle-light-icon');
+
+            if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                lightIcon.classList.remove('hidden');
+            } else {
+                darkIcon.classList.remove('hidden');
+            }
+
+            document.getElementById('theme-toggle').addEventListener('click', function () {
+                darkIcon.classList.toggle('hidden');
+                lightIcon.classList.toggle('hidden');
+
+                if (localStorage.getItem('color-theme') === 'light') {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('color-theme', 'dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('color-theme', 'light');
+                }
+            });
+        });
+    </script>
+
+</body>
+
+</html>
