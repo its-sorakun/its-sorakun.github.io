@@ -1,0 +1,555 @@
+<!-- Implementation details: Single-page technical write-up detailing low-level Windows NT mechanics, 14-byte x86_64 inline assembly detours, raw NTFS Master File Table indexing, and AMD SMU Ring-0 telemetry drivers for the Kiko desktop assistant. -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hooking an LLM into the Windows Kernel, Console, and Filesystem - ブログ (Blogs) | SoraKun</title>
+    <link rel="icon" type="image/png" href="/images/11-1.png">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Tailwind config + Dark mode init -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        };
+
+        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/css/style.css">
+
+    <meta name="description"
+        content="How I used an AI desktop companion as an excuse to explore Windows NT internals, assembly detours, raw NTFS file tables, and kernel telemetry.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://sorakun.is-a.dev/blogs/exploring-windows-internals-with-ai.html">
+    <meta property="og:title" content="Hooking an LLM into the Windows Kernel, Console, and Filesystem | SoraKun">
+    <meta property="og:description"
+        content="A reflection on personal computing, curiosity-driven hacking, and using AI to interact directly with low-level Windows mechanisms.">
+    <meta property="og:image" content="https://sorakun.is-a.dev/images/columbina.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@sorakun_sensei">
+    <meta name="twitter:title" content="Hooking an LLM into the Windows Kernel, Console, and Filesystem | SoraKun">
+    <meta name="twitter:description"
+        content="A reflection on personal computing, curiosity-driven hacking, and using AI to interact directly with low-level Windows mechanisms.">
+    <meta name="twitter:image" content="https://sorakun.is-a.dev/images/columbina.jpg">
+</head>
+
+<body
+    class="bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-300 antialiased min-h-screen flex flex-col">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12 w-full flex-grow">
+
+        <!-- Header -->
+        <header class="grid grid-cols-[1fr_auto] gap-y-5 items-start sm:items-center mb-10 sm:mb-16">
+            <nav class="col-span-2 sm:col-span-1 row-start-2 sm:row-start-1 w-full sm:w-auto">
+                <ul class="flex flex-wrap justify-center sm:justify-start gap-x-4 gap-y-3 sm:gap-6 text-sm font-medium">
+                    <li>
+                        <a href="/"
+                            class="flex items-center hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6">
+                                </path>
+                            </svg>
+                            ホーム (home)
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/journey/journey.html"
+                            class="flex items-center hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7">
+                                </path>
+                            </svg>
+                            旅 (journey)
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/blogs/blogs.html"
+                            class="flex items-center hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z">
+                                </path>
+                            </svg>
+                            ブログ (blog)
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/projects/projects.html"
+                            class="flex items-center hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z">
+                                </path>
+                            </svg>
+                            プロジェクト (projects)
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+
+            <!-- Dark Mode Toggle Button -->
+            <div class="col-span-2 sm:col-span-1 row-start-1 sm:row-start-1 flex justify-end w-full sm:w-auto">
+                <button id="theme-toggle" type="button" aria-label="Toggle dark mode"
+                    class="text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-300 dark:focus:ring-gray-700 rounded-lg text-sm p-2 transition-colors">
+                    <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+                    </svg>
+                    <svg id="theme-toggle-light-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path
+                            d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"
+                            fill-rule="evenodd" clip-rule="evenodd"></path>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex flex-col text-left py-4 sm:py-8">
+            <!-- Article Title -->
+            <h1
+                class="font-syne text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white tracking-tight mb-4 text-center sm:text-left leading-tight">
+                Hooking an LLM into the Windows Kernel, Console, and Filesystem
+            </h1>
+
+            <!-- Meta info -->
+            <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 font-mono mb-6 text-center sm:text-left">
+                Windows Internals • Win32 / Assembly • Personal Computing
+            </p>
+
+            <!-- Project Links Callout -->
+            <div
+                class="mb-8 p-4 rounded-xl bg-white dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 flex flex-wrap gap-x-6 gap-y-2 text-xs sm:text-sm font-mono">
+                <span class="text-gray-500 dark:text-gray-400 font-sans font-semibold">Repository:</span>
+                <a href="https://github.com/its-sorakun/aiko-assistant" target="_blank" rel="noopener noreferrer"
+                    class="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1">
+                    github.com/its-sorakun/aiko-assistant
+                </a>
+                <span class="text-gray-300 dark:text-gray-700 hidden sm:inline">•</span>
+                <span class="text-gray-500 dark:text-gray-400 font-sans font-semibold">Internals Spec:</span>
+                <a href="https://github.com/its-sorakun/aiko-assistant/blob/main/INTERNALS.md" target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1">
+                    INTERNALS.md
+                </a>
+            </div>
+
+            <!-- Content section -->
+            <article
+                class="space-y-6 sm:space-y-8 text-sm sm:text-base leading-relaxed sm:leading-loose text-gray-700 dark:text-gray-300">
+
+                <!-- Section 1 -->
+                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-2">
+                    1. Rejecting the Productivity Trap
+                </h2>
+
+                <p>
+                    Around early 2023, Generative AI exploded, and tech discussions turned into an endless parade of venture capital hype. Social feeds were dominated by people building B2B SaaS wrappers, automated cold-email generators, customer support bots, and corporate productivity tools. 
+                </p>
+
+                <p>
+                    Technology culture often reduces computing from an intellectual pursuit to a mere instrument of economic mobility and corporate career signaling. I completely reject that reduction.
+                </p>
+
+                <p>
+                    I grew up during the Windows XP era—spending weekends tweaking visual styles, hanging out on forums, watching anime, and exploring how operating systems actually function beneath the desktop. Building an automated spreadsheet assistant held zero appeal to me. Computing has always been a personal playground, not a corporate career audition.
+                </p>
+
+                <p>
+                    There was also a hard financial reality: OpenAI required credit card billing and international payment setups that were inaccessible to a student without disposable income. When Google quietly released their free PaLM API tier (before the Gemini rebrand), it opened up an unmetered sandbox. No credit cards, no ticking cloud bills, and no commercial expectations. 
+                </p>
+
+                <p>
+                    The motivation was simple, playful, and unapologetically weeb: I wanted an anime desktop companion who lived on my machine, bantered like a friend, and actually had "hands" on the operating system.
+                </p>
+
+                <!-- Section 2 -->
+                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
+                    2. The Naive Ancestor: AIMS (2023)
+                </h2>
+
+                <p>
+                    The project started under the name <strong>AIMS</strong> (<em>Artificial Intelligence Made From Scratch</em>). Looking back at the legacy code, the implementation was hilariously naive: a Python script running against the PaLM API with a cheerful anime prompt, executing commands through crude substring matching:
+                </p>
+
+                <div
+                    class="p-4 rounded-xl bg-gray-100 dark:bg-gray-800/60 font-mono text-xs overflow-x-auto text-gray-800 dark:text-gray-200">
+                    <pre><code># The 2023 execution mechanism: substring matching + raw batch scripts
+if "genshin" in user_input.lower():
+    os.system(r"ai\batch_files\genshin_launch.bat")
+elif "debloat" in user_input.lower():
+    os.system(r"ai\batch_files\android_debloat.bat")</code></pre>
+                </div>
+
+                <p>
+                    The folder accumulated around twenty batch files: launching Genshin Impact, firing up Discord, running ADB commands to strip OEM bloatware from my phone, searching Wikipedia, or setting anime wallpapers.
+                </p>
+
+                <p>
+                    It was rigid and brittle. If the phrasing changed slightly, the string match missed. But it proved a fundamental principle: language models didn't need to stay trapped in a browser tab. They could be wired into local executables.
+                </p>
+
+                <!-- Section 3 -->
+                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
+                    3. Evolution to Aiko, Then Kiko: Why Web Wrappers Are an Insult to Hardware
+                </h2>
+
+                <p>
+                    When function calling arrived in modern model SDKs, the project evolved into <strong>Aiko</strong>, which was later refined and renamed to <strong>Kiko</strong> (explaining the lineage behind the repository name).
+                </p>
+
+                <p>
+                    Most developers building desktop AI assistants today follow the standard web playbook: an Electron window, Node.js, LangChain, ChromaDB, and Docker containers. But running a bloated browser engine to control a desktop computer felt like an insult to the machine.
+                </p>
+
+                <p>
+                    My machine is an <strong>Acer Nitro 5</strong> (AMD Ryzen 5 7535HS, 16GB DDR5, and an NVIDIA RTX 3050 Laptop GPU with 4GB VRAM) running a manually stripped Windows 10 LTSC setup. When memory and GPU resources are actively shared with 3D games and local C++ compilation, wasting 800MB of RAM and background CPU cycles on an Electron shell just to display text is an unacceptable tradeoff.
+                </p>
+
+                <p>
+                    More importantly, Windows is not a web browser. It is a full x86_64 operating system with physical memory, an NTFS filesystem driver, user32 window hierarchies, kernel drivers, and DirectX swapchains. Instead of hiding behind high-level Python libraries, I used the assistant as an excuse to dig straight into native Windows mechanisms.
+                </p>
+
+                <!-- Section 4 -->
+                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
+                    4. The Mechanics: Exploring Windows Internals
+                </h2>
+
+                <p>
+                    Whenever the assistant needed a new capability, I avoided third-party automation tools and built the plumbing directly into the operating system.
+                </p>
+
+                <!-- Sub-section: Terminal Eavesdropping -->
+                <div class="space-y-4 pt-2">
+                    <h3 class="font-bold text-gray-900 dark:text-white text-base sm:text-lg">
+                        1. Console: The IFEO Hijack &amp; The 14-Byte Trampoline Trap
+                    </h3>
+                    <p>
+                        I wanted the assistant to monitor my terminal in the background and roast me or explain errors whenever a command failed (like git merge conflicts or missing packages), without forcing me to launch a dedicated shell wrapper.
+                    </p>
+                    <p>
+                        My first attempt was creating a custom C++ console process that redirected standard input and output pipes. It failed miserably: standard pipe redirection completely broke interactive terminal features—tab completion died, cursor positioning glitched, and ANSI color sequences refused to render because it bypassed the Windows ConPTY subsystem.
+                    </p>
+                    <p>
+                        The real hack was dropping directly into the Windows Registry:
+                    </p>
+                    <div
+                        class="p-3 rounded-lg bg-gray-100 dark:bg-gray-800/60 font-mono text-xs text-blue-600 dark:text-blue-400 break-all">
+                        HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\powershell.exe
+                    </div>
+                    <p>
+                        By setting a <code class="text-xs font-mono">Debugger</code> string value pointing to my custom C++ injector (<code class="text-xs font-mono">injector.exe</code>), Windows was tricked into redirecting <em>every single invocation</em> of PowerShell across the entire operating system through my binary.
+                    </p>
+
+                    <!-- Console Injection Dataflow ASCII -->
+                    <div
+                        class="p-4 rounded-xl bg-gray-100 dark:bg-gray-800/60 font-mono text-xs overflow-x-auto text-gray-800 dark:text-gray-200 leading-normal">
+                        <pre><code>[Console Eavesdropping Architecture]
+
+User / Terminal Process (powershell.exe)
+   │
+   ├─► Triggered via IFEO (Image File Execution Options: Debugger)
+   ▼
+Injector Proxy (injector.exe)
+   │  ├─► Spawns powershell.exe with DEBUG_PROCESS (Bypasses recursive IFEO loop)
+   │  ├─► Holds child PID &amp; proxies lifecycle (Prevents VS Code node-pty crash)
+   │  └─► VirtualAllocEx + CreateRemoteThread -&gt; Injects hook.dll
+   ▼
+hook.dll (Inside powershell.exe address space)
+   │  ├─► Resolves kernelbase.dll!WriteConsoleW
+   │  ├─► Overwrites prologue with 14-byte 64-bit indirect jump detour
+   │  ├─► Flushes instruction cache: FlushInstructionCache()
+   │  └─► Synchronizes stream via CRITICAL_SECTION
+   ▼
+Console Output Stream
+   │
+   ├─► Matches "FullyQualifiedErrorId" or stderr signatures
+   ├─► Dispatches UDP packet to Kiko daemon (localhost:9999)
+   └─► Injects commentary in 24-bit ANSI pink: \x1b[38;2;255;105;180m</code></pre>
+                    </div>
+
+                    <p>
+                        That immediately caused two nasty engineering roadblocks:
+                    </p>
+                    <ul class="list-disc list-inside space-y-2 text-sm pl-2">
+                        <li>
+                            <strong>The Recursive IFEO Fork Bomb:</strong> When <code class="text-xs font-mono">injector.exe</code> called <code class="text-xs font-mono">CreateProcessW("powershell.exe")</code>, Windows tried to evaluate IFEO again, triggering an infinite recursive loop that froze the machine. The fix was passing <code class="text-xs font-mono">DEBUG_PROCESS | DEBUG_ONLY_THIS_PROCESS</code> flags—the Windows NT kernel explicitly skips IFEO evaluation if the process is being spawned under an active debugger.
+                        </li>
+                        <li>
+                            <strong>The IDE Terminal Crash Mystery:</strong> While Windows Terminal worked, launching PowerShell inside VS Code or modern IDEs caused the terminal pane to instantly crash and disappear. The reason? Modern IDEs use <code class="text-xs font-mono">node-pty</code>, which tracks the <em>exact child PID</em> spawned by <code class="text-xs font-mono">CreateProcess</code>. When my injector exited after 5ms, the IDE thought PowerShell died and tore down the pane. The injector had to be rewritten as a blocking, handle-inheriting lifecycle proxy (<code class="text-xs font-mono">bInheritHandles = TRUE</code>, <code class="text-xs font-mono">WaitForSingleObject</code>).
+                        </li>
+                    </ul>
+                    <p>
+                        Once PowerShell spawned cleanly, the injector allocated remote memory (<code class="text-xs font-mono">VirtualAllocEx</code>), injected a DLL (<code class="text-xs font-mono">hook.dll</code>) via <code class="text-xs font-mono">CreateRemoteThread</code>, and hooked <code class="text-xs font-mono">WriteConsoleW</code>.
+                    </p>
+                    <p>
+                        Here lay another trap: on 64-bit Windows, <code class="text-xs font-mono">kernel32.dll!WriteConsoleW</code> is merely a 6-byte forwarder stub pointing into <code class="text-xs font-mono">kernelbase.dll</code>. Overwriting 14 bytes there corrupts adjacent memory pages and causes instant access violations. The hook had to resolve the address directly inside <code class="text-xs font-mono">kernelbase.dll!WriteConsoleW</code>, overwriting the function prologue with an absolute 14-byte 64-bit indirect jump:
+                    </p>
+
+                    <!-- Assembly Trampoline Memory Layout -->
+                    <div
+                        class="p-4 rounded-xl bg-gray-100 dark:bg-gray-800/60 font-mono text-xs overflow-x-auto text-gray-800 dark:text-gray-200 leading-normal">
+                        <pre><code>Target: kernelbase.dll!WriteConsoleW (64-bit)
+
+[Original Function Prologue]
+Address             Bytes                  Disassembly
+0x00007FFF89A12010  48 83 EC 38            sub rsp, 38h
+0x00007FFF89A12014  48 8B 44 24 60         mov rax, [rsp+60h]
+0x00007FFF89A12019  48 89 5C 24 50         mov [rsp+50h], rbx
+
+[After 14-Byte Inline Jump Detour]
+Address             Bytes                  Disassembly
+0x00007FFF89A12010  48 B8 [ 8-Byte Ptr ]   mov rax, DetourWriteConsoleW
+0x00007FFF89A1201A  FF E0                  jmp rax
+0x00007FFF89A1201C  90 90                  nop nop  ; 2-byte alignment padding</code></pre>
+                    </div>
+
+                    <p>
+                        Because modern console output is heavily multithreaded (background threads spit out ANSI shell integration sequences while the main thread prints commands), the hook wraps calls in a <code class="text-xs font-mono">CRITICAL_SECTION</code> and immediately flushes instruction caches across all CPU cores using <code class="text-xs font-mono">FlushInstructionCache(GetCurrentProcess(), targetFunc, 14)</code>. When an error signature (like <code class="text-xs font-mono">FullyQualifiedErrorId</code>) appears in the rolling buffer, the hook pauses execution, sends the error packet over loopback UDP to the assistant, and injects commentary directly into the console in bright 24-bit ANSI pink (<code class="text-xs font-mono">\x1b[38;2;255;105;180m</code>) before the user ever sees the next prompt.
+                    </p>
+                </div>
+
+                <!-- Sub-section: NTFS MFT Search -->
+                <div class="space-y-4 pt-4">
+                    <h3 class="font-bold text-gray-900 dark:text-white text-base sm:text-lg">
+                        2. Filesystem: Sub-Second Search via Raw NTFS Master File Table ($MFT)
+                    </h3>
+                    <p>
+                        A desktop assistant needs to find files instantly. Using Python's standard <code class="text-xs font-mono">os.walk()</code> took anywhere from 40 to 90 seconds across multi-terabyte drives because it issues thousands of individual <code class="text-xs font-mono">FindFirstFileW</code> / <code class="text-xs font-mono">FindNextFileW</code> system calls. Meanwhile, the Windows Search Indexing service was permanently disabled on my LTSC installation to eliminate background disk thrashing and preserve SSD health.
+                    </p>
+                    <p>
+                        Instead of asking the operating system to traverse directory trees recursively, I bypassed the Win32 filesystem driver entirely:
+                    </p>
+                    <ul class="list-disc list-inside space-y-1 text-sm pl-2">
+                        <li>Opened raw physical volume handles (<code class="text-xs font-mono">\\.\C:</code>, <code class="text-xs font-mono">\\.\D:</code>) with administrator privileges (<code class="text-xs font-mono">GENERIC_READ | GENERIC_WRITE</code>).</li>
+                        <li>Issued the low-level I/O control code <code class="text-xs font-mono">FSCTL_GET_NTFS_VOLUME_DATA</code> to deduce cluster geometry and verify the filesystem state.</li>
+                        <li>Streamed Master File Table records directly from disk using <code class="text-xs font-mono">FSCTL_ENUM_USN_DATA</code> (NTFS Update Sequence Number Change Journal) in large contiguous memory buffers.</li>
+                        <li>Converted raw 64-bit File Reference Numbers (FRNs) into absolute filesystem paths using <code class="text-xs font-mono">OpenFileById</code> with <code class="text-xs font-mono">FILE_FLAG_BACKUP_SEMANTICS</code> and <code class="text-xs font-mono">GetFinalPathNameByHandleW</code>.</li>
+                    </ul>
+                    <p>
+                        The C++ scanner splits queries into lowercase tokens and streams through millions of records in memory, locating files across a 1TB NVMe SSD in approximately <strong>800 milliseconds</strong>.
+                    </p>
+                </div>
+
+                <!-- Sub-section: Ring-0 Hardware Telemetry -->
+                <div class="space-y-4 pt-4">
+                    <h3 class="font-bold text-gray-900 dark:text-white text-base sm:text-lg">
+                        3. Kernel: Ring-0 AMD SMU Probing &amp; Shared Memory
+                    </h3>
+                    <p>
+                        Standard user-mode WMI thermal queries (<code class="text-xs font-mono">MSApi_ThermalZoneTemperature</code>) return static dummy values or fail completely on gaming laptop motherboards because thermal diodes route through proprietary vendor Embedded Controller (EC) chips rather than standard ACPI tables.
+                    </p>
+                    <p>
+                        To monitor my Ryzen 5 7535HS silicon:
+                    </p>
+                    <ul class="list-disc list-inside space-y-1 text-sm pl-2">
+                        <li>Built a persistent C++ background daemon (<code class="text-xs font-mono">cpu_monitor.exe</code>).</li>
+                        <li>Dynamically loaded AMD's official SDK (<code class="text-xs font-mono">Platform.dll</code>) to issue IOCTL control codes to <code class="text-xs font-mono">AMDRyzenMasterDriver.sys</code>—a trusted, signed Ring-0 kernel driver.</li>
+                        <li>The driver speaks directly over the hardware bus with the <strong>System Management Unit (SMU)</strong> on the silicon, reading internal CPU junction diodes.</li>
+                    </ul>
+
+                    <!-- Shared Memory Telemetry ASCII -->
+                    <div
+                        class="p-4 rounded-xl bg-gray-100 dark:bg-gray-800/60 font-mono text-xs overflow-x-auto text-gray-800 dark:text-gray-200 leading-normal">
+                        <pre><code>[Ring-0 Hardware Telemetry Pipeline]
+
+AMD Ryzen 5 Silicon (Internal SMU Junction Diodes)
+       │
+       ▼ [Hardware Bus]
+AMDRyzenMasterDriver.sys (Signed Ring-0 Kernel Driver)
+       │
+       ▼ [IOCTL via Platform.dll]
+cpu_monitor.exe (C++ Background Daemon)
+       │
+       ▼ [Dumps junction temperature every 3000ms]
+Named Win32 Shared Memory: "Local\AikoRyzenTelemetry" (CreateFileMapping)
+       │
+       ├─► Python Backend (mmap.mmap reads 4-byte float with 0% CPU overhead)
+       └─► Observer Thread (Paints Win32 GDI thermal HUD if Junction &gt; 90°C)</code></pre>
+                    </div>
+
+                    <p>
+                        Cold-booting a driver session takes hundreds of milliseconds. To eliminate latency during chat evaluation, the daemon runs continuously, polling every 3000ms and dumping temperatures into a named Win32 shared memory block (<code class="text-xs font-mono">CreateFileMapping</code>). Python's <code class="text-xs font-mono">mmap</code> module reads the junction temperature with zero CPU overhead. An independent background observer thread continuously monitors this shared memory and paints an emergency GDI overlay on screen if thermal thresholds are breached.
+                    </p>
+                </div>
+
+                <!-- Section 5 -->
+                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
+                    5. The Graveyard: Honest Dead Ends &amp; The 4GB VRAM Wall
+                </h2>
+
+                <p>
+                    Genuine tinkering inevitably hits brick walls, and documenting what failed is just as valuable as what worked:
+                </p>
+
+                <div class="space-y-4">
+                    <div class="p-5 rounded-2xl bg-white dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 space-y-2 text-sm">
+                        <h3 class="font-bold text-gray-900 dark:text-white text-base">Direct Memory Ripping for Discord</h3>
+                        <p>
+                            Scraping Discord via OCR is slow. I wrote a native C++ scanner (<code class="text-xs font-mono">VirtualQueryEx</code> + <code class="text-xs font-mono">ReadProcessMemory</code>) to sweep all read-write memory pages of <code class="text-xs font-mono">discord.exe</code>, piping 50MB memory dumps into CUDA 12.4 PyTorch and FAISS on my GPU.
+                        </p>
+                        <p>
+                            It shattered against Chromium's architecture: modern Electron apps dynamically shard their V8 JavaScript heap across 15+ undocumented child renderer processes. The active chat DOM does not reside in the parent process, and hunting dynamic V8 string fragments through garbage-collected memory proved too fragile for daily use.
+                        </p>
+                    </div>
+
+                    <div class="p-5 rounded-2xl bg-white dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 space-y-2 text-sm">
+                        <h3 class="font-bold text-gray-900 dark:text-white text-base">The Proactive Companion &amp; The 4GB VRAM Barrier</h3>
+                        <p>
+                            I wanted the assistant to sit silently in the background, watch screen events via <code class="text-xs font-mono">SetWinEventHook</code>, and use a small local model (Llama 3 8B via Ollama) to decide when to interject spontaneously.
+                        </p>
+                        <p>
+                            This crashed headfirst into my hardware limits. The mobile RTX 3050 has only 4GB of VRAM. Running Ollama locally consumed 3.5GB to 3.8GB of video memory. The moment I launched Genshin Impact or a 3D game, the GPU entered violent VRAM paging across the PCIe bus, collapsing frame rates from 60 FPS down to an unplayable 4 FPS slide show. Respecting physical hardware meant pausing the feature until higher-VRAM silicon arrives.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Section 6 -->
+                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
+                    6. The Takeaway: Why We Build
+                </h2>
+
+                <p>
+                    At first glance, an "AI desktop assistant" sounds like the most generic project imaginable: an API key, a prompt, and a UI window.
+                </p>
+
+                <p>
+                    In reality, software is defined by its mechanisms, not its marketing label. Building Kiko wasn't about entering a hackathon, raising venture funding, or optimizing my productivity for an employer. It was about taking an emerging technology and using it as a vehicle to explore assembly detours, kernel driver IOCTLs, raw disk structures, and Windows subsystems that are usually hidden behind layers of abstraction.
+                </p>
+
+                <p>
+                    Personal computing should remain an intellectual pursuit driven by curiosity and craftsmanship. Sometimes, the most rewarding project you can build is simply one made for yourself, on your own hardware, just to see how the system actually works.
+                </p>
+
+                <!-- Post Navigation -->
+                <div
+                    class="pt-6 border-t border-gray-200 dark:border-gray-800 flex flex-wrap justify-between items-center text-sm gap-4">
+                    <a href="blogs.html"
+                        class="inline-flex items-center text-blue-600 dark:text-blue-400 hover:underline">
+                        &larr; Back to all posts
+                    </a>
+                    <a href="debloating-windows-ltsc.html"
+                        class="inline-flex items-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
+                        Windows 10 LTSC Debloating &rarr;
+                    </a>
+                </div>
+
+            </article>
+        </main>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 w-full">
+        <footer class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-800 pb-8">
+            <nav>
+                <ul class="flex flex-wrap justify-center sm:justify-start gap-x-5 gap-y-4 sm:gap-6 text-sm font-medium">
+                    <li>
+                        <a href="https://github.com/its-sorakun" target="_blank" rel="noopener noreferrer"
+                            class="flex items-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
+                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path fill-rule="evenodd"
+                                    d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
+                                    clip-rule="evenodd"></path>
+                            </svg>
+                            GitHub
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://t.me/sorakun_sh" target="_blank" rel="noopener noreferrer"
+                            class="flex items-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
+                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                <path
+                                    d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z">
+                                </path>
+                            </svg>
+                            Telegram
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://x.com/sorakun_sensei" target="_blank" rel="noopener noreferrer"
+                            class="flex items-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
+                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path
+                                    d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z">
+                                </path>
+                            </svg>
+                            X
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://discordapp.com/users/sorakun.senpai" target="_blank" rel="noopener noreferrer"
+                            class="flex items-center text-gray-500 hover:text-[#5865F2] dark:text-gray-400 dark:hover:text-white transition-colors">
+                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                <path fill-rule="evenodd" clip-rule="evenodd"
+                                    d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.174 15.11c-.93.682-1.82 1.095-2.701 1.37a.04.04 0 0 1-.046-.022 8.76 8.76 0 0 1-.553-.9c-.013-.02-.003-.047.018-.057c.563-.216 1.102-.497 1.616-.843a.044.044 0 0 0 .004-.07c-.113-.086-.227-.178-.335-.272a.042.042 0 0 0-.044-.006c-3.003 1.385-6.262 1.385-9.232 0a.04.04 0 0 0-.045.006c-.108.094-.222.186-.335.272a.042.042 0 0 0 .004.07c.514.346 1.053.627 1.617.843c.02.01.03.037.017.057c-.17.31-.358.61-.553.9a.042.042 0 0 1-.047.022c-.88-.275-1.77-.688-2.7-1.37a.038.038 0 0 1-.016-.037c.435-4.148 1.573-7.447 3.424-10.428a.046.046 0 0 1 .022-.018c1.36-.54 2.65-.85 3.92-.916a.047.047 0 0 1 .043.023c.168.307.354.704.484 1.012a14.28 14.28 0 0 1 4.131 0c.13-.308.316-.705.484-1.012a.045.045 0 0 1 .043-.023c1.27.067 2.56.377 3.92.916a.041.041 0 0 1 .022.018c1.85 2.98 2.99 6.28 3.424 10.428A.04.04 0 0 1 17.174 15.11zM9.13 11.23c-.722 0-1.304.664-1.304 1.478s.582 1.477 1.304 1.477c.723 0 1.305-.663 1.305-1.477s-.573-1.478-1.305-1.478zm5.74 0c-.722 0-1.304.664-1.304 1.478s.582 1.477 1.304 1.477c.723 0 1.305-.663 1.305-1.477s-.573-1.478-1.305-1.478z">
+                                </path>
+                            </svg>
+                            Discord
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </footer>
+    </div>
+
+    <!-- Theme Toggle Script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const darkIcon = document.getElementById('theme-toggle-dark-icon');
+            const lightIcon = document.getElementById('theme-toggle-light-icon');
+
+            if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                lightIcon.classList.remove('hidden');
+            } else {
+                darkIcon.classList.remove('hidden');
+            }
+
+            document.getElementById('theme-toggle').addEventListener('click', function () {
+                darkIcon.classList.toggle('hidden');
+                lightIcon.classList.toggle('hidden');
+
+                if (localStorage.getItem('color-theme') === 'light') {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('color-theme', 'dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('color-theme', 'light');
+                }
+            });
+        });
+    </script>
+
+</body>
+
+</html>
