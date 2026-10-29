@@ -247,8 +247,19 @@ elif "debloat" in user_input.lower():
 
                 <!-- Section 3 -->
                 <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
-                    3. Console Eavesdropping: The IFEO Hijack and a 14-Byte Jump
+                    3. Under the Hood: Interfacing with Windows Internals
                 </h2>
+
+                <p>
+                    Rather than treating Windows as a black box and relying on high-level GUI automation or simulated
+                    mouse clicks, Kiko was built to drop directly down to the operating system's underlying mechanisms.
+                    Here is how the core subsystems were actually implemented:
+                </p>
+
+                <!-- Subtitle 3.1 -->
+                <h3 class="font-syne text-lg sm:text-xl font-bold text-gray-900 dark:text-white pt-4">
+                    Console Eavesdropping: The IFEO Hijack and a 14-Byte Jump
+                </h3>
 
                 <p>
                     I wanted Kiko to monitor my terminal in the background and roast me or explain errors whenever a
@@ -379,10 +390,10 @@ Address             Bytes                  Disassembly
                     prompt.
                 </p>
 
-                <!-- Section 4 -->
-                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
-                    4. Filesystem Search: Reading the Raw NTFS USN Journal in 800ms
-                </h2>
+                <!-- Subtitle 3.2 -->
+                <h3 class="font-syne text-lg sm:text-xl font-bold text-gray-900 dark:text-white pt-4">
+                    Filesystem Search: Reading the Raw NTFS USN Journal in 800ms
+                </h3>
 
                 <p>
                     A desktop assistant needs to find files instantly. Using Python's standard <code
@@ -420,10 +431,10 @@ Address             Bytes                  Disassembly
                     memory, locating files across a 1TB NVMe SSD in approximately <strong>800 milliseconds</strong>.
                 </p>
 
-                <!-- Section 5 -->
-                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
-                    5. Hardware Telemetry: Querying the Ryzen SMU Through Ring-0
-                </h2>
+                <!-- Subtitle 3.3 -->
+                <h3 class="font-syne text-lg sm:text-xl font-bold text-gray-900 dark:text-white pt-4">
+                    Hardware Telemetry: Querying the Ryzen SMU Through Ring-0
+                </h3>
 
                 <p>
                     Standard user-mode WMI thermal queries (<code
@@ -475,10 +486,10 @@ Named Win32 Shared Memory: "Local\KikoRyzenTelemetry" (CreateFileMapping)
                     paints an emergency GDI overlay on screen if thermal thresholds are breached.
                 </p>
 
-                <!-- Section 6 -->
-                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
-                    6. Desktop Perception: Crawling the DWM Z-Order Stack
-                </h2>
+                <!-- Subtitle 3.4 -->
+                <h3 class="font-syne text-lg sm:text-xl font-bold text-gray-900 dark:text-white pt-4">
+                    Desktop Perception: Crawling the DWM Z-Order Stack
+                </h3>
 
                 <p>
                     One of the features I wanted was for Kiko to understand what I was actively coding or looking at
@@ -532,20 +543,22 @@ while hwnd:
 
                 <p>
                     From there, extracting the window title reveals the context—for instance, VS Code's title exposes
-                    the active file path (<code class="text-xs font-mono">filename.py - Project - Visual Studio Code</code>).
+                    the active file path (<code
+                        class="text-xs font-mono">filename.py - Project - Visual Studio Code</code>).
                     Kiko pairs that title with local workspace paths, reads the raw bytes directly off disk, and loads
                     the active code context straight into the prompt.
                 </p>
 
-                <!-- Section 7 -->
-                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
-                    7. Background Audio: WinRT System Media Transport Controls
-                </h2>
+                <!-- Subtitle 3.5 -->
+                <h3 class="font-syne text-lg sm:text-xl font-bold text-gray-900 dark:text-white pt-4">
+                    Background Audio: WinRT System Media Transport Controls
+                </h3>
 
                 <p>
                     Most virtual assistant tutorials control music through simulated keypresses: synthesizing virtual
                     <code class="text-xs font-mono">VK_MEDIA_PLAY_PAUSE</code> keystrokes through <code
-                        class="text-xs font-mono">keybd_event</code> or <code class="text-xs font-mono">SendInput</code>.
+                        class="text-xs font-mono">keybd_event</code> or <code
+                        class="text-xs font-mono">SendInput</code>.
                 </p>
 
                 <p>
@@ -593,10 +606,10 @@ for session in sessions:
                     tokens.
                 </p>
 
-                <!-- Section 8 -->
-                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
-                    8. Clean Process Spawning: Registry Scraping and Detached Handles
-                </h2>
+                <!-- Subtitle 3.6 -->
+                <h3 class="font-syne text-lg sm:text-xl font-bold text-gray-900 dark:text-white pt-4">
+                    Clean Process Spawning: Registry Scraping and Detached Handles
+                </h3>
 
                 <p>
                     Asking an assistant to launch an application seems simple until you try executing shell commands
@@ -634,9 +647,8 @@ HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall</code></pre
                 </p>
 
                 <p>
-                    The fix was passing the Win32 creation flag <code
-                        class="text-xs font-mono">DETACHED_PROCESS</code> (<code
-                        class="text-xs font-mono">0x00000008</code>) into the process creation flags:
+                    The fix was passing the Win32 creation flag <code class="text-xs font-mono">DETACHED_PROCESS</code>
+                    (<code class="text-xs font-mono">0x00000008</code>) into the process creation flags:
                 </p>
 
                 <div
@@ -655,10 +667,10 @@ subprocess.Popen(
                     without locking up the running assistant or tying themselves to the terminal lifecycle.
                 </p>
 
-                <!-- Section 9 -->
-                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
-                    9. Bluetooth Radio Control: Forcing Audio Sink Services via Win32
-                </h2>
+                <!-- Subtitle 3.7 -->
+                <h3 class="font-syne text-lg sm:text-xl font-bold text-gray-900 dark:text-white pt-4">
+                    Bluetooth Radio Control: Forcing Audio Sink Services via Win32
+                </h3>
 
                 <p>
                     The modern Windows Settings Bluetooth panel is notoriously clunky and slow. Reconnecting paired
@@ -672,7 +684,8 @@ subprocess.Popen(
                         class="text-xs font-mono">Bthprops.lib</code>) require packed memory structures like <code
                         class="text-xs font-mono">BLUETOOTH_DEVICE_SEARCH_PARAMS</code> and <code
                         class="text-xs font-mono">BLUETOOTH_DEVICE_INFO</code>. Recreating these structures manually in
-                    Python via <code class="text-xs font-mono">ctypes</code> is brittle and error-prone, so I dropped down
+                    Python via <code class="text-xs font-mono">ctypes</code> is brittle and error-prone, so I dropped
+                    down
                     to a compact native C++ helper (<code class="text-xs font-mono">bt_manager.exe</code>) to let the
                     compiler handle binary struct alignment cleanly.
                 </p>
@@ -716,10 +729,10 @@ DWORD result = BluetoothSetServiceState(
                     link on demand—bypassing the Windows Settings app entirely.
                 </p>
 
-                <!-- Section 10 -->
-                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
-                    10. Dynamic Privacy: Bypassing the camsvc ConsentStore
-                </h2>
+                <!-- Subtitle 3.8 -->
+                <h3 class="font-syne text-lg sm:text-xl font-bold text-gray-900 dark:text-white pt-4">
+                    Dynamic Privacy: Bypassing the camsvc ConsentStore
+                </h3>
 
                 <p>
                     When checking local weather conditions, Kiko needs geolocation coordinates. If Windows Location
@@ -778,9 +791,9 @@ def set_master_capability(capability: str, allow: bool):
                     sensors.
                 </p>
 
-                <!-- Section 11 -->
+                <!-- Section 4 -->
                 <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
-                    11. The Dead Ends: Discord Process Memory and the 4GB VRAM Wall
+                    4. The Dead Ends: Memory Ripping and the 4GB VRAM Wall
                 </h2>
 
                 <p>
@@ -797,14 +810,19 @@ def set_master_capability(capability: str, allow: bool):
                             Scraping Discord via OCR is slow. I wrote a native C++ scanner (<code
                                 class="text-xs font-mono">VirtualQueryEx</code> + <code
                                 class="text-xs font-mono">ReadProcessMemory</code>) to sweep read-write memory pages of
-                            <code class="text-xs font-mono">discord.exe</code>. I tried to solve the problem by using RAG
+                            <code class="text-xs font-mono">discord.exe</code>. I tried to solve the problem by using
+                            RAG
                             once the data was out of RAM and performing similarity search on it.
                         </p>
                         <p>
-                            This actually "worked"—the pipeline could ingest chunks and match relevant messages—but not every
-                            time. Chromium and Electron-based applications still suffered: their architecture dynamically
-                            shards the V8 JavaScript heap across 15+ undocumented child renderer processes. The active chat DOM
-                            didn't reliably reside in the primary process, and hunting dynamic V8 string fragments through
+                            This actually "worked"—the pipeline could ingest chunks and match relevant messages—but not
+                            every
+                            time. Chromium and Electron-based applications still suffered: their architecture
+                            dynamically
+                            shards the V8 JavaScript heap across 15+ undocumented child renderer processes. The active
+                            chat DOM
+                            didn't reliably reside in the primary process, and hunting dynamic V8 string fragments
+                            through
                             constantly garbage-collected memory proved too fragile for daily use.
                         </p>
                     </div>
@@ -828,9 +846,9 @@ def set_master_capability(capability: str, allow: bool):
                     </div>
                 </div>
 
-                <!-- Section 12 -->
+                <!-- Section 5 -->
                 <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
-                    12. Looking Back: Computing as a Personal Playground
+                    5. Looking Back: Computing as a Personal Playground
                 </h2>
 
                 <p>
@@ -841,7 +859,8 @@ def set_master_capability(capability: str, allow: bool):
                 <p>
                     In reality, software is defined by its mechanisms, not SaaS hype or college viva grading rubrics.
                     Building Kiko wasn't about entering hackathons, chasing venture capital, or making a corporate
-                    productivity tool. It was about taking an emerging technology and using it in my own way—as an excuse
+                    productivity tool. It was about taking an emerging technology and using it in my own way—as an
+                    excuse
                     to explore assembly detours, kernel driver IOCTLs, raw NTFS structures, and Windows subsystems that
                     are usually hidden behind layers of abstraction.
                 </p>
