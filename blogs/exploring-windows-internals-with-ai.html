@@ -151,13 +151,13 @@
             <div
                 class="mb-8 p-4 rounded-xl bg-white dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 flex flex-wrap gap-x-6 gap-y-2 text-xs sm:text-sm font-mono">
                 <span class="text-gray-500 dark:text-gray-400 font-sans font-semibold">Repository:</span>
-                <a href="https://github.com/its-sorakun/aiko-assistant" target="_blank" rel="noopener noreferrer"
+                <a href="https://github.com/its-sorakun/kiko-assistant" target="_blank" rel="noopener noreferrer"
                     class="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1">
-                    github.com/its-sorakun/aiko-assistant
+                    github.com/its-sorakun/kiko-assistant
                 </a>
                 <span class="text-gray-300 dark:text-gray-700 hidden sm:inline">•</span>
                 <span class="text-gray-500 dark:text-gray-400 font-sans font-semibold">Internals Spec:</span>
-                <a href="https://github.com/its-sorakun/aiko-assistant/blob/main/INTERNALS.md" target="_blank"
+                <a href="https://github.com/its-sorakun/kiko-assistant/blob/main/INTERNALS.md" target="_blank"
                     rel="noopener noreferrer"
                     class="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1">
                     INTERNALS.md
@@ -170,7 +170,7 @@
 
                 <!-- Section 1 -->
                 <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-2">
-                    1. Rejecting the Productivity Trap
+                    1. The Starting Point: Free PaLM API and an Acer Nitro 5
                 </h2>
 
                 <p>
@@ -195,11 +195,19 @@
 
                 <!-- Section 2 -->
                 <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
-                    2. The Naive Ancestor: AIMS (2023)
+                    2. How It All Started: Beyond College Viva Projects
                 </h2>
 
                 <p>
-                    The project started under the name <strong>AIMS</strong> (<em>Artificial Intelligence Made From Scratch</em>). Looking back at the legacy code, the implementation was hilariously naive: a Python script running against the PaLM API with a cheerful anime prompt, executing commands through crude substring matching:
+                    When I first looked into building an assistant, searching YouTube tutorials was a massive disappointment. They were all the exact same shallow, copy-paste college projects built just to pass a viva exam and get marks from a professor: a basic Python script using <code>speech_recognition</code>, <code>pyttsx3</code>, and a chain of hardcoded <code>if "open youtube" in query: webbrowser.open()</code> statements. 
+                </p>
+
+                <p>
+                    They were glorified toys made for grading rubrics rather than real engineering. I wanted something genuinely capable—an assistant that could touch low-level OS primitives, inspect running processes, intercept terminal output, and query physical hardware.
+                </p>
+
+                <p>
+                    The project started under the name <strong>AIMS</strong> (<em>Artificial Intelligence Made From Scratch</em>). The initial prototype was admittedly naive: a Python script running against the PaLM API with a cheerful anime prompt, executing commands through crude substring matching:
                 </p>
 
                 <div
@@ -216,65 +224,43 @@ elif "debloat" in user_input.lower():
                 </p>
 
                 <p>
-                    It was rigid and brittle. If the phrasing changed slightly, the string match missed. But it proved a fundamental principle: language models didn't need to stay trapped in a browser tab. They could be wired into local executables.
+                    It was rigid and brittle. If the phrasing changed slightly, the string match missed. But it proved a fundamental principle: language models didn't need to stay trapped in a browser tab. They could be wired directly into local executables.
+                </p>
+
+                <p>
+                    Eventually, life got busy with college studies and other priorities, and the project sat paused on my drive for months. Later on, when modern LLM function calling arrived in model SDKs, I picked it back up. The project evolved into <strong>Aiko</strong>, rebuilt around direct Win32 integration instead of crude batch files, and was eventually refined and renamed to <strong>Kiko</strong> as the architecture matured.
                 </p>
 
                 <!-- Section 3 -->
                 <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
-                    3. Evolution to Aiko, Then Kiko: Why Web Wrappers Are an Insult to Hardware
+                    3. Console Eavesdropping: The IFEO Hijack and a 14-Byte Jump
                 </h2>
 
                 <p>
-                    When function calling arrived in modern model SDKs, the project evolved into <strong>Aiko</strong>, which was later refined and renamed to <strong>Kiko</strong> (explaining the lineage behind the repository name).
+                    I wanted Kiko to monitor my terminal in the background and roast me or explain errors whenever a command failed (like git merge conflicts or missing packages), without forcing me to launch a dedicated custom shell wrapper.
                 </p>
 
                 <p>
-                    Most developers building desktop AI assistants today follow the standard web playbook: an Electron window, Node.js, LangChain, ChromaDB, and Docker containers. But running a bloated browser engine to control a desktop computer felt like an insult to the machine.
+                    My first attempt was creating a custom C++ console process that redirected standard input and output pipes. It failed miserably: standard pipe redirection completely broke interactive terminal features—tab completion died, cursor positioning glitched, and ANSI color sequences refused to render because it bypassed the Windows ConPTY subsystem.
                 </p>
 
                 <p>
-                    My machine is an <strong>Acer Nitro 5</strong> (AMD Ryzen 5 7535HS, 16GB DDR5, and an NVIDIA RTX 3050 Laptop GPU with 4GB VRAM) running a manually stripped Windows 10 LTSC setup. When memory and GPU resources are actively shared with 3D games and local C++ compilation, wasting 800MB of RAM and background CPU cycles on an Electron shell just to display text is an unacceptable tradeoff.
+                    The real hack was dropping directly into the Windows Registry:
                 </p>
+
+                <div
+                    class="p-3 rounded-lg bg-gray-100 dark:bg-gray-800/60 font-mono text-xs text-blue-600 dark:text-blue-400 break-all">
+                    HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\powershell.exe
+                </div>
 
                 <p>
-                    More importantly, Windows is not a web browser. It is a full x86_64 operating system with physical memory, an NTFS filesystem driver, user32 window hierarchies, kernel drivers, and DirectX swapchains. Instead of hiding behind high-level Python libraries, I used the assistant as an excuse to dig straight into native Windows mechanisms.
+                    By setting a <code class="text-xs font-mono">Debugger</code> string value pointing to my custom C++ injector (<code class="text-xs font-mono">injector.exe</code>), Windows was tricked into redirecting <em>every single invocation</em> of PowerShell across the entire operating system through my binary.
                 </p>
 
-                <!-- Section 4 -->
-                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
-                    4. The Mechanics: Exploring Windows Internals
-                </h2>
-
-                <p>
-                    Whenever the assistant needed a new capability, I avoided third-party automation tools and built the plumbing directly into the operating system.
-                </p>
-
-                <!-- Sub-section: Terminal Eavesdropping -->
-                <div class="space-y-4 pt-2">
-                    <h3 class="font-bold text-gray-900 dark:text-white text-base sm:text-lg">
-                        1. Console: The IFEO Hijack &amp; The 14-Byte Trampoline Trap
-                    </h3>
-                    <p>
-                        I wanted the assistant to monitor my terminal in the background and roast me or explain errors whenever a command failed (like git merge conflicts or missing packages), without forcing me to launch a dedicated shell wrapper.
-                    </p>
-                    <p>
-                        My first attempt was creating a custom C++ console process that redirected standard input and output pipes. It failed miserably: standard pipe redirection completely broke interactive terminal features—tab completion died, cursor positioning glitched, and ANSI color sequences refused to render because it bypassed the Windows ConPTY subsystem.
-                    </p>
-                    <p>
-                        The real hack was dropping directly into the Windows Registry:
-                    </p>
-                    <div
-                        class="p-3 rounded-lg bg-gray-100 dark:bg-gray-800/60 font-mono text-xs text-blue-600 dark:text-blue-400 break-all">
-                        HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\powershell.exe
-                    </div>
-                    <p>
-                        By setting a <code class="text-xs font-mono">Debugger</code> string value pointing to my custom C++ injector (<code class="text-xs font-mono">injector.exe</code>), Windows was tricked into redirecting <em>every single invocation</em> of PowerShell across the entire operating system through my binary.
-                    </p>
-
-                    <!-- Console Injection Dataflow ASCII -->
-                    <div
-                        class="p-4 rounded-xl bg-gray-100 dark:bg-gray-800/60 font-mono text-xs overflow-x-auto text-gray-800 dark:text-gray-200 leading-normal">
-                        <pre><code>[Console Eavesdropping Architecture]
+                <!-- Console Injection Dataflow ASCII -->
+                <div
+                    class="p-4 rounded-xl bg-gray-100 dark:bg-gray-800/60 font-mono text-xs overflow-x-auto text-gray-800 dark:text-gray-200 leading-normal">
+                    <pre><code>[Console Eavesdropping Architecture]
 
 User / Terminal Process (powershell.exe)
    │
@@ -296,30 +282,33 @@ Console Output Stream
    ├─► Matches "FullyQualifiedErrorId" or stderr signatures
    ├─► Dispatches UDP packet to Kiko daemon (localhost:9999)
    └─► Injects commentary in 24-bit ANSI pink: \x1b[38;2;255;105;180m</code></pre>
-                    </div>
+                </div>
 
-                    <p>
-                        That immediately caused two nasty engineering roadblocks:
-                    </p>
-                    <ul class="list-disc list-inside space-y-2 text-sm pl-2">
-                        <li>
-                            <strong>The Recursive IFEO Fork Bomb:</strong> When <code class="text-xs font-mono">injector.exe</code> called <code class="text-xs font-mono">CreateProcessW("powershell.exe")</code>, Windows tried to evaluate IFEO again, triggering an infinite recursive loop that froze the machine. The fix was passing <code class="text-xs font-mono">DEBUG_PROCESS | DEBUG_ONLY_THIS_PROCESS</code> flags—the Windows NT kernel explicitly skips IFEO evaluation if the process is being spawned under an active debugger.
-                        </li>
-                        <li>
-                            <strong>The IDE Terminal Crash Mystery:</strong> While Windows Terminal worked, launching PowerShell inside VS Code or modern IDEs caused the terminal pane to instantly crash and disappear. The reason? Modern IDEs use <code class="text-xs font-mono">node-pty</code>, which tracks the <em>exact child PID</em> spawned by <code class="text-xs font-mono">CreateProcess</code>. When my injector exited after 5ms, the IDE thought PowerShell died and tore down the pane. The injector had to be rewritten as a blocking, handle-inheriting lifecycle proxy (<code class="text-xs font-mono">bInheritHandles = TRUE</code>, <code class="text-xs font-mono">WaitForSingleObject</code>).
-                        </li>
-                    </ul>
-                    <p>
-                        Once PowerShell spawned cleanly, the injector allocated remote memory (<code class="text-xs font-mono">VirtualAllocEx</code>), injected a DLL (<code class="text-xs font-mono">hook.dll</code>) via <code class="text-xs font-mono">CreateRemoteThread</code>, and hooked <code class="text-xs font-mono">WriteConsoleW</code>.
-                    </p>
-                    <p>
-                        Here lay another trap: on 64-bit Windows, <code class="text-xs font-mono">kernel32.dll!WriteConsoleW</code> is merely a 6-byte forwarder stub pointing into <code class="text-xs font-mono">kernelbase.dll</code>. Overwriting 14 bytes there corrupts adjacent memory pages and causes instant access violations. The hook had to resolve the address directly inside <code class="text-xs font-mono">kernelbase.dll!WriteConsoleW</code>, overwriting the function prologue with an absolute 14-byte 64-bit indirect jump:
-                    </p>
+                <p>
+                    That immediately caused two nasty engineering roadblocks:
+                </p>
 
-                    <!-- Assembly Trampoline Memory Layout -->
-                    <div
-                        class="p-4 rounded-xl bg-gray-100 dark:bg-gray-800/60 font-mono text-xs overflow-x-auto text-gray-800 dark:text-gray-200 leading-normal">
-                        <pre><code>Target: kernelbase.dll!WriteConsoleW (64-bit)
+                <ul class="list-disc list-inside space-y-2 text-sm pl-2">
+                    <li>
+                        <strong>The Recursive IFEO Fork Bomb:</strong> When <code class="text-xs font-mono">injector.exe</code> called <code class="text-xs font-mono">CreateProcessW("powershell.exe")</code>, Windows tried to evaluate IFEO again, triggering an infinite recursive loop that froze the machine. The fix was passing <code class="text-xs font-mono">DEBUG_PROCESS | DEBUG_ONLY_THIS_PROCESS</code> flags—the Windows NT kernel explicitly skips IFEO evaluation if the process is being spawned under an active debugger.
+                    </li>
+                    <li>
+                        <strong>The IDE Terminal Crash Mystery:</strong> While Windows Terminal worked, launching PowerShell inside VS Code or modern IDEs caused the terminal pane to instantly crash and disappear. Modern IDEs use <code class="text-xs font-mono">node-pty</code>, which tracks the <em>exact child PID</em> spawned by <code class="text-xs font-mono">CreateProcess</code>. When my injector exited after 5ms, the IDE thought PowerShell died and tore down the pane. The injector had to be rewritten as a blocking, handle-inheriting lifecycle proxy (<code class="text-xs font-mono">bInheritHandles = TRUE</code>, <code class="text-xs font-mono">WaitForSingleObject</code>).
+                    </li>
+                </ul>
+
+                <p>
+                    Once PowerShell spawned cleanly, the injector allocated remote memory (<code class="text-xs font-mono">VirtualAllocEx</code>), injected a DLL (<code class="text-xs font-mono">hook.dll</code>) via <code class="text-xs font-mono">CreateRemoteThread</code>, and hooked <code class="text-xs font-mono">WriteConsoleW</code>.
+                </p>
+
+                <p>
+                    Here lay another trap: on 64-bit Windows, <code class="text-xs font-mono">kernel32.dll!WriteConsoleW</code> is merely a 6-byte forwarder stub pointing into <code class="text-xs font-mono">kernelbase.dll</code>. Overwriting 14 bytes there corrupts adjacent memory pages and causes instant access violations. The hook had to resolve the address directly inside <code class="text-xs font-mono">kernelbase.dll!WriteConsoleW</code>, overwriting the function prologue with an absolute 14-byte 64-bit indirect jump:
+                </p>
+
+                <!-- Assembly Trampoline Memory Layout -->
+                <div
+                    class="p-4 rounded-xl bg-gray-100 dark:bg-gray-800/60 font-mono text-xs overflow-x-auto text-gray-800 dark:text-gray-200 leading-normal">
+                    <pre><code>Target: kernelbase.dll!WriteConsoleW (64-bit)
 
 [Original Function Prologue]
 Address             Bytes                  Disassembly
@@ -332,56 +321,59 @@ Address             Bytes                  Disassembly
 0x00007FFF89A12010  48 B8 [ 8-Byte Ptr ]   mov rax, DetourWriteConsoleW
 0x00007FFF89A1201A  FF E0                  jmp rax
 0x00007FFF89A1201C  90 90                  nop nop  ; 2-byte alignment padding</code></pre>
-                    </div>
-
-                    <p>
-                        Because modern console output is heavily multithreaded (background threads spit out ANSI shell integration sequences while the main thread prints commands), the hook wraps calls in a <code class="text-xs font-mono">CRITICAL_SECTION</code> and immediately flushes instruction caches across all CPU cores using <code class="text-xs font-mono">FlushInstructionCache(GetCurrentProcess(), targetFunc, 14)</code>. When an error signature (like <code class="text-xs font-mono">FullyQualifiedErrorId</code>) appears in the rolling buffer, the hook pauses execution, sends the error packet over loopback UDP to the assistant, and injects commentary directly into the console in bright 24-bit ANSI pink (<code class="text-xs font-mono">\x1b[38;2;255;105;180m</code>) before the user ever sees the next prompt.
-                    </p>
                 </div>
 
-                <!-- Sub-section: NTFS MFT Search -->
-                <div class="space-y-4 pt-4">
-                    <h3 class="font-bold text-gray-900 dark:text-white text-base sm:text-lg">
-                        2. Filesystem: Sub-Second Search via Raw NTFS Master File Table ($MFT)
-                    </h3>
-                    <p>
-                        A desktop assistant needs to find files instantly. Using Python's standard <code class="text-xs font-mono">os.walk()</code> took anywhere from 40 to 90 seconds across multi-terabyte drives because it issues thousands of individual <code class="text-xs font-mono">FindFirstFileW</code> / <code class="text-xs font-mono">FindNextFileW</code> system calls. Meanwhile, the Windows Search Indexing service was permanently disabled on my LTSC installation to eliminate background disk thrashing and preserve SSD health.
-                    </p>
-                    <p>
-                        Instead of asking the operating system to traverse directory trees recursively, I bypassed the Win32 filesystem driver entirely:
-                    </p>
-                    <ul class="list-disc list-inside space-y-1 text-sm pl-2">
-                        <li>Opened raw physical volume handles (<code class="text-xs font-mono">\\.\C:</code>, <code class="text-xs font-mono">\\.\D:</code>) with administrator privileges (<code class="text-xs font-mono">GENERIC_READ | GENERIC_WRITE</code>).</li>
-                        <li>Issued the low-level I/O control code <code class="text-xs font-mono">FSCTL_GET_NTFS_VOLUME_DATA</code> to deduce cluster geometry and verify the filesystem state.</li>
-                        <li>Streamed Master File Table records directly from disk using <code class="text-xs font-mono">FSCTL_ENUM_USN_DATA</code> (NTFS Update Sequence Number Change Journal) in large contiguous memory buffers.</li>
-                        <li>Converted raw 64-bit File Reference Numbers (FRNs) into absolute filesystem paths using <code class="text-xs font-mono">OpenFileById</code> with <code class="text-xs font-mono">FILE_FLAG_BACKUP_SEMANTICS</code> and <code class="text-xs font-mono">GetFinalPathNameByHandleW</code>.</li>
-                    </ul>
-                    <p>
-                        The C++ scanner splits queries into lowercase tokens and streams through millions of records in memory, locating files across a 1TB NVMe SSD in approximately <strong>800 milliseconds</strong>.
-                    </p>
-                </div>
+                <p>
+                    Because modern console output is heavily multithreaded (background threads spit out ANSI shell integration sequences while the main thread prints commands), the hook wraps calls in a <code class="text-xs font-mono">CRITICAL_SECTION</code> and immediately flushes instruction caches across all CPU cores using <code class="text-xs font-mono">FlushInstructionCache(GetCurrentProcess(), targetFunc, 14)</code>. When an error signature (like <code class="text-xs font-mono">FullyQualifiedErrorId</code>) appears in the rolling buffer, the hook pauses execution, sends the error packet over loopback UDP to the assistant, and injects commentary directly into the console in bright 24-bit ANSI pink (<code class="text-xs font-mono">\x1b[38;2;255;105;180m</code>) before the user ever sees the next prompt.
+                </p>
 
-                <!-- Sub-section: Ring-0 Hardware Telemetry -->
-                <div class="space-y-4 pt-4">
-                    <h3 class="font-bold text-gray-900 dark:text-white text-base sm:text-lg">
-                        3. Kernel: Ring-0 AMD SMU Probing &amp; Shared Memory
-                    </h3>
-                    <p>
-                        Standard user-mode WMI thermal queries (<code class="text-xs font-mono">MSApi_ThermalZoneTemperature</code>) return static dummy values or fail completely on gaming laptop motherboards because thermal diodes route through proprietary vendor Embedded Controller (EC) chips rather than standard ACPI tables.
-                    </p>
-                    <p>
-                        To monitor my Ryzen 5 7535HS silicon:
-                    </p>
-                    <ul class="list-disc list-inside space-y-1 text-sm pl-2">
-                        <li>Built a persistent C++ background daemon (<code class="text-xs font-mono">cpu_monitor.exe</code>).</li>
-                        <li>Dynamically loaded AMD's official SDK (<code class="text-xs font-mono">Platform.dll</code>) to issue IOCTL control codes to <code class="text-xs font-mono">AMDRyzenMasterDriver.sys</code>—a trusted, signed Ring-0 kernel driver.</li>
-                        <li>The driver speaks directly over the hardware bus with the <strong>System Management Unit (SMU)</strong> on the silicon, reading internal CPU junction diodes.</li>
-                    </ul>
+                <!-- Section 4 -->
+                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
+                    4. Filesystem Search: Reading the Raw NTFS USN Journal in 800ms
+                </h2>
 
-                    <!-- Shared Memory Telemetry ASCII -->
-                    <div
-                        class="p-4 rounded-xl bg-gray-100 dark:bg-gray-800/60 font-mono text-xs overflow-x-auto text-gray-800 dark:text-gray-200 leading-normal">
-                        <pre><code>[Ring-0 Hardware Telemetry Pipeline]
+                <p>
+                    A desktop assistant needs to find files instantly. Using Python's standard <code class="text-xs font-mono">os.walk()</code> took anywhere from 40 to 90 seconds across multi-terabyte drives because it issues thousands of individual <code class="text-xs font-mono">FindFirstFileW</code> / <code class="text-xs font-mono">FindNextFileW</code> system calls. Meanwhile, the Windows Search Indexing service was permanently disabled on my LTSC installation to eliminate background disk thrashing and preserve SSD health.
+                </p>
+
+                <p>
+                    Instead of asking the operating system to traverse directory trees recursively, I bypassed the Win32 filesystem driver entirely:
+                </p>
+
+                <ul class="list-disc list-inside space-y-1 text-sm pl-2">
+                    <li>Opened raw physical volume handles (<code class="text-xs font-mono">\\.\C:</code>, <code class="text-xs font-mono">\\.\D:</code>) with administrator privileges (<code class="text-xs font-mono">GENERIC_READ | GENERIC_WRITE</code>).</li>
+                    <li>Issued the low-level I/O control code <code class="text-xs font-mono">FSCTL_GET_NTFS_VOLUME_DATA</code> to deduce cluster geometry and verify the filesystem state.</li>
+                    <li>Streamed Master File Table records directly from disk using <code class="text-xs font-mono">FSCTL_ENUM_USN_DATA</code> (NTFS Update Sequence Number Change Journal) in large contiguous memory buffers.</li>
+                    <li>Converted raw 64-bit File Reference Numbers (FRNs) into absolute filesystem paths using <code class="text-xs font-mono">OpenFileById</code> with <code class="text-xs font-mono">FILE_FLAG_BACKUP_SEMANTICS</code> and <code class="text-xs font-mono">GetFinalPathNameByHandleW</code>.</li>
+                </ul>
+
+                <p>
+                    The C++ scanner splits queries into lowercase tokens and streams through millions of records in memory, locating files across a 1TB NVMe SSD in approximately <strong>800 milliseconds</strong>.
+                </p>
+
+                <!-- Section 5 -->
+                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
+                    5. Hardware Telemetry: Querying the Ryzen SMU Through Ring-0
+                </h2>
+
+                <p>
+                    Standard user-mode WMI thermal queries (<code class="text-xs font-mono">MSApi_ThermalZoneTemperature</code>) return static dummy values or fail completely on gaming laptop motherboards because thermal diodes route through proprietary vendor Embedded Controller (EC) chips rather than standard ACPI tables.
+                </p>
+
+                <p>
+                    To monitor my Ryzen 5 7535HS silicon:
+                </p>
+
+                <ul class="list-disc list-inside space-y-1 text-sm pl-2">
+                    <li>Built a persistent C++ background daemon (<code class="text-xs font-mono">cpu_monitor.exe</code>).</li>
+                    <li>Dynamically loaded AMD's official SDK (<code class="text-xs font-mono">Platform.dll</code>) to issue IOCTL control codes to <code class="text-xs font-mono">AMDRyzenMasterDriver.sys</code>—a trusted, signed Ring-0 kernel driver.</li>
+                    <li>The driver speaks directly over the hardware bus with the <strong>System Management Unit (SMU)</strong> on the silicon, reading internal CPU junction diodes.</li>
+                </ul>
+
+                <!-- Shared Memory Telemetry ASCII -->
+                <div
+                    class="p-4 rounded-xl bg-gray-100 dark:bg-gray-800/60 font-mono text-xs overflow-x-auto text-gray-800 dark:text-gray-200 leading-normal">
+                    <pre><code>[Ring-0 Hardware Telemetry Pipeline]
 
 AMD Ryzen 5 Silicon (Internal SMU Junction Diodes)
        │
@@ -392,20 +384,19 @@ AMDRyzenMasterDriver.sys (Signed Ring-0 Kernel Driver)
 cpu_monitor.exe (C++ Background Daemon)
        │
        ▼ [Dumps junction temperature every 3000ms]
-Named Win32 Shared Memory: "Local\AikoRyzenTelemetry" (CreateFileMapping)
+Named Win32 Shared Memory: "Local\KikoRyzenTelemetry" (CreateFileMapping)
        │
        ├─► Python Backend (mmap.mmap reads 4-byte float with 0% CPU overhead)
        └─► Observer Thread (Paints Win32 GDI thermal HUD if Junction &gt; 90°C)</code></pre>
-                    </div>
-
-                    <p>
-                        Cold-booting a driver session takes hundreds of milliseconds. To eliminate latency during chat evaluation, the daemon runs continuously, polling every 3000ms and dumping temperatures into a named Win32 shared memory block (<code class="text-xs font-mono">CreateFileMapping</code>). Python's <code class="text-xs font-mono">mmap</code> module reads the junction temperature with zero CPU overhead. An independent background observer thread continuously monitors this shared memory and paints an emergency GDI overlay on screen if thermal thresholds are breached.
-                    </p>
                 </div>
 
-                <!-- Section 5 -->
+                <p>
+                    Cold-booting a driver session takes hundreds of milliseconds. To eliminate latency during chat evaluation, the daemon runs continuously, polling every 3000ms and dumping temperatures into a named Win32 shared memory block (<code class="text-xs font-mono">CreateFileMapping</code>). Python's <code class="text-xs font-mono">mmap</code> module reads the junction temperature with zero CPU overhead. An independent background observer thread continuously monitors this shared memory and paints an emergency GDI overlay on screen if thermal thresholds are breached.
+                </p>
+
+                <!-- Section 6 -->
                 <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
-                    5. The Graveyard: Honest Dead Ends &amp; The 4GB VRAM Wall
+                    6. The Dead Ends: Discord Process Memory and the 4GB VRAM Wall
                 </h2>
 
                 <p>
@@ -419,7 +410,7 @@ Named Win32 Shared Memory: "Local\AikoRyzenTelemetry" (CreateFileMapping)
                             Scraping Discord via OCR is slow. I wrote a native C++ scanner (<code class="text-xs font-mono">VirtualQueryEx</code> + <code class="text-xs font-mono">ReadProcessMemory</code>) to sweep all read-write memory pages of <code class="text-xs font-mono">discord.exe</code>, piping 50MB memory dumps into CUDA 12.4 PyTorch and FAISS on my GPU.
                         </p>
                         <p>
-                            It shattered against Chromium's architecture: modern Electron apps dynamically shard their V8 JavaScript heap across 15+ undocumented child renderer processes. The active chat DOM does not reside in the parent process, and hunting dynamic V8 string fragments through garbage-collected memory proved too fragile for daily use.
+                            It shattered against Chromium's architecture: Discord dynamically shards its V8 JavaScript heap across 15+ undocumented child renderer processes. The active chat DOM does not reside in the parent process, and hunting dynamic V8 string fragments through garbage-collected memory proved too fragile for daily use.
                         </p>
                     </div>
 
@@ -434,9 +425,9 @@ Named Win32 Shared Memory: "Local\AikoRyzenTelemetry" (CreateFileMapping)
                     </div>
                 </div>
 
-                <!-- Section 6 -->
+                <!-- Section 7 -->
                 <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
-                    6. The Takeaway: Why We Build
+                    7. Looking Back: Computing as a Personal Playground
                 </h2>
 
                 <p>
@@ -444,7 +435,7 @@ Named Win32 Shared Memory: "Local\AikoRyzenTelemetry" (CreateFileMapping)
                 </p>
 
                 <p>
-                    In reality, software is defined by its mechanisms, not its marketing label. Building Kiko wasn't about entering a hackathon, raising venture funding, or optimizing my productivity for an employer. It was about taking an emerging technology and using it as a vehicle to explore assembly detours, kernel driver IOCTLs, raw disk structures, and Windows subsystems that are usually hidden behind layers of abstraction.
+                    In reality, software is defined by its mechanisms, not marketing hype or college viva grading rubrics. Building Kiko wasn't about entering a hackathon, raising venture funding, or optimizing my productivity for an employer. It was about taking an emerging technology and using it as a vehicle to explore assembly detours, kernel driver IOCTLs, raw disk structures, and Windows subsystems that are usually hidden behind layers of abstraction.
                 </p>
 
                 <p>
