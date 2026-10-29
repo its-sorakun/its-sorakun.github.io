@@ -1,4 +1,4 @@
-<!-- Implementation details: Single-page technical write-up detailing low-level Windows NT mechanics, 14-byte x86_64 inline assembly detours, raw NTFS Master File Table indexing, AMD SMU Ring-0 telemetry, DWM Z-order traversal, WinRT SMTC audio routing, Win32 Bluetooth service state manipulation, and Capability Access Manager registry stores for the Kiko desktop assistant. -->
+<!-- Implementation details: Single-page technical write-up detailing low-level Windows NT mechanics, 14-byte x86_64 inline assembly detours, raw NTFS Master File Table indexing, AMD SMU Ring-0 telemetry, DWM Z-order traversal, DXGI Desktop Duplication GPU frame buffers, WinRT SMTC audio routing, Win32 Bluetooth service state manipulation, and Capability Access Manager registry stores for the Kiko desktop assistant. -->
 <!DOCTYPE html>
 <html lang="en">
 
@@ -204,11 +204,18 @@
                 </p>
 
                 <p>
-                    I wanted something that didn't just talk, but actually had hands on the operating system. And so,
-                    the
-                    project started under the name <strong>AIMS</strong> which had a full form btw: <em>Artificial
-                        Intelligence Made From
-                        Scratch</em>. Crazy name for a simple PaLM API wrapper, right? Lmao.
+                    It's not like the concept of an OS assistant was completely new—Microsoft already tried Cortana
+                    (which everyone ended up disabling) and eventually cooked up Recall. But Cortana was just a locked-down
+                    Bing search widget, and Recall is corporate telemetry taking constant snapshots into a database. More
+                    importantly? Neither of them were <strong>fun</strong>. I wanted something personal that could actually
+                    do what Cortana and Recall both can't: have real "hands" on the operating system, roast me in the
+                    terminal, talk to kernel drivers, and feel like a companion I actually had fun building and using.
+                </p>
+
+                <p>
+                    And so, the project started under the name <strong>AIMS</strong> which had a full form btw:
+                    <em>Artificial Intelligence Made From Scratch</em>. Crazy name for a simple PaLM API wrapper, right?
+                    Lmao.
                 </p>
                 <p>
                     Anyways, the initial
@@ -431,6 +438,16 @@ Address             Bytes                  Disassembly
                     memory, locating files across a 1TB NVMe SSD in approximately <strong>800 milliseconds</strong>.
                 </p>
 
+                <p>
+                    Having instantaneous disk search turned into a huge advantage when building higher-level tools later
+                    on. For instance, in Kiko's <strong>Job Application Orchestrator</strong>, if I give her a company
+                    email and a job description, she doesn't make me manually browse for a resume. She runs an MFT scan
+                    across all drives in milliseconds to locate all resume PDFs, pipes them through a local FAISS RAG
+                    sub-agent to select the best match for the role, drafts a tailored cold email, and copies it
+                    straight to my Windows clipboard via raw Win32 calls. I will add more tools that take advantage of
+                    this later if I get any ideas.
+                </p>
+
                 <!-- Subtitle 3.3 -->
                 <h3 class="font-syne text-lg sm:text-xl font-bold text-gray-900 dark:text-white pt-4">
                     Hardware Telemetry: Querying the Ryzen SMU Through Ring-0
@@ -482,8 +499,18 @@ Named Win32 Shared Memory: "Local\KikoRyzenTelemetry" (CreateFileMapping)
                     evaluation, the daemon runs continuously, polling every 3000ms and dumping temperatures into a named
                     Win32 shared memory block (<code class="text-xs font-mono">CreateFileMapping</code>). Python's <code
                         class="text-xs font-mono">mmap</code> module reads the junction temperature with zero CPU
-                    overhead. An independent background observer thread continuously monitors this shared memory and
-                    paints an emergency GDI overlay on screen if thermal thresholds are breached.
+                    overhead. An independent background observer thread continuously monitors this shared memory
+                    alongside GPU thermals via <code class="text-xs font-mono">nvidia-smi</code>.
+                </p>
+
+                <p>
+                    I'm honestly pretty particular about my laptop's thermals. My previous Asus laptop had a terrible
+                    cooling system, which sent me down a rabbit hole of researching how to keep temperatures down and
+                    eventually using <code class="text-xs font-mono">ryzenadj</code>. The thermal OCD became permanent:
+                    even though my current machine doesn't overheat at all, I still feel like something is missing
+                    if the MSI Afterburner overlay isn't active on my screen while gaming, or HWiNFO when doing heavy
+                    workloads. So having Kiko monitor both CPU and GPU temps in the background and pop a transparent GDI
+                    overlay if thresholds ever breach was a natural addition.
                 </p>
 
                 <!-- Subtitle 3.4 -->
@@ -551,6 +578,51 @@ while hwnd:
 
                 <!-- Subtitle 3.5 -->
                 <h3 class="font-syne text-lg sm:text-xl font-bold text-gray-900 dark:text-white pt-4">
+                    GPU-Accelerated Vision: Direct DXGI Framebuffer Capture
+                </h3>
+
+                <p>
+                    Crawling the DWM Z-order stack was great for deducing filenames, but it had a fundamental blind spot:
+                    it was completely blind to what was actually being rendered on screen. If I wanted Kiko to evaluate an
+                    in-game stat screen, analyze a graphical artifact, or debug a UI layout, inspecting window titles
+                    did nothing.
+                </p>
+
+                <p>
+                    Later on, I developed a native screen reading pipeline that bypasses slow user-space screenshot APIs
+                    and reads frames directly from the GPU using the <strong>Desktop Duplication API</strong> (<code
+                        class="text-xs font-mono">IDXGIOutputDuplication</code>):
+                </p>
+
+                <div
+                    class="p-4 rounded-xl bg-gray-100 dark:bg-gray-800/60 font-mono text-xs overflow-x-auto text-gray-800 dark:text-gray-200">
+                    <pre><code>// Duplicating the active display frame straight from GPU VRAM in ~1ms
+IDXGIOutputDuplication* pDeskDupl = nullptr;
+pOutput1->DuplicateOutput(pD3DDevice, &amp;pDeskDupl);
+
+DXGI_OUTDUPL_FRAME_INFO frameInfo;
+IDXGIResource* pDesktopResource = nullptr;
+pDeskDupl->AcquireNextFrame(500, &amp;frameInfo, &amp;pDesktopResource);</code></pre>
+                </div>
+
+                <p>
+                    A native C++ helper (<code class="text-xs font-mono">dxgi_capture.exe</code>) duplicates the
+                    desktop frame buffer straight out of GPU VRAM in approximately <strong>1 millisecond</strong>.
+                    Writing uncompressed 4K frames to disk as BMP files would introduce horrible I/O latency and thrash
+                    SSD write cycles. Instead, Python pre-allocates a 35MB block of named shared memory directly in the
+                    Windows pagefile (<code class="text-xs font-mono">mmap.mmap(-1, ...)</code>), and the C++ engine
+                    blasts raw BGRA pixel bytes directly into that memory block.
+                </p>
+
+                <p>
+                    If Multi-Plane Overlay (MPO) or a full-screen exclusive game triggers a black screen, a fallback
+                    heuristic immediately invokes GDI <code class="text-xs font-mono">BitBlt</code>. The uncompressed
+                    frame is then piped straight into the multimodal vision model, giving Kiko true visual perception
+                    over my displays in real time.
+                </p>
+
+                <!-- Subtitle 3.6 -->
+                <h3 class="font-syne text-lg sm:text-xl font-bold text-gray-900 dark:text-white pt-4">
                     Background Audio: WinRT System Media Transport Controls
                 </h3>
 
@@ -606,7 +678,7 @@ for session in sessions:
                     tokens.
                 </p>
 
-                <!-- Subtitle 3.6 -->
+                <!-- Subtitle 3.7 -->
                 <h3 class="font-syne text-lg sm:text-xl font-bold text-gray-900 dark:text-white pt-4">
                     Clean Process Spawning: Registry Scraping and Detached Handles
                 </h3>
@@ -667,7 +739,7 @@ subprocess.Popen(
                     without locking up the running assistant or tying themselves to the terminal lifecycle.
                 </p>
 
-                <!-- Subtitle 3.7 -->
+                <!-- Subtitle 3.8 -->
                 <h3 class="font-syne text-lg sm:text-xl font-bold text-gray-900 dark:text-white pt-4">
                     Bluetooth Radio Control: Forcing Audio Sink Services via Win32
                 </h3>
@@ -729,7 +801,7 @@ DWORD result = BluetoothSetServiceState(
                     link on demand—bypassing the Windows Settings app entirely.
                 </p>
 
-                <!-- Subtitle 3.8 -->
+                <!-- Subtitle 3.9 -->
                 <h3 class="font-syne text-lg sm:text-xl font-bold text-gray-900 dark:text-white pt-4">
                     Dynamic Privacy: Bypassing the camsvc ConsentStore
                 </h3>
