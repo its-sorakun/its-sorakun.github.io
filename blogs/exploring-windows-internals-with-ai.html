@@ -1,4 +1,4 @@
-<!-- Implementation details: Single-page technical write-up detailing low-level Windows NT mechanics, 14-byte x86_64 inline assembly detours, raw NTFS Master File Table indexing, and AMD SMU Ring-0 telemetry drivers for the Kiko desktop assistant. -->
+<!-- Implementation details: Single-page technical write-up detailing low-level Windows NT mechanics, 14-byte x86_64 inline assembly detours, raw NTFS Master File Table indexing, AMD SMU Ring-0 telemetry, DWM Z-order traversal, WinRT SMTC audio routing, Win32 Bluetooth service state manipulation, and Capability Access Manager registry stores for the Kiko desktop assistant. -->
 <!DOCTYPE html>
 <html lang="en">
 
@@ -170,44 +170,50 @@
 
                 <!-- Section 1 -->
                 <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-2">
-                    1. The Starting Point: Free PaLM API and an Acer Nitro 5
+                    1. The Idea: How It All Started
                 </h2>
 
                 <p>
-                    Around early 2023, Generative AI exploded, and tech discussions turned into an endless parade of venture capital hype. Social feeds were dominated by people building B2B SaaS wrappers, automated cold-email generators, customer support bots, and corporate productivity tools. 
+                    Around early 2023, Generative AI exploded, and tech discussions turned into an endless parade of
+                    venture capital hype. Social feeds were dominated by people building "AI-based" SaaS websites,
+                    slapping a quick prompt on an API, and calling it a day. I had zero interest in building another
+                    corporate productivity tool or spreadsheet assistant. While I found AI to be a genuinely interesting
+                    innovation, I wanted to use it in my own way—as a personal project, exploring what the technology
+                    could actually do rather than chasing commercial trends.
                 </p>
 
                 <p>
-                    Technology culture often reduces computing from an intellectual pursuit to a mere instrument of economic mobility and corporate career signaling. I completely reject that reduction.
-                </p>
-
-                <p>
-                    I grew up during the Windows XP era—spending weekends tweaking visual styles, hanging out on forums, watching anime, and exploring how operating systems actually function beneath the desktop. Building an automated spreadsheet assistant held zero appeal to me. Computing has always been a personal playground, not a corporate career audition.
-                </p>
-
-                <p>
-                    There was also a hard financial reality: OpenAI required credit card billing and international payment setups that were inaccessible to a student without disposable income. When Google quietly released their free PaLM API tier (before the Gemini rebrand), it opened up an unmetered sandbox. No credit cards, no ticking cloud bills, and no commercial expectations. 
-                </p>
-
-                <p>
-                    The motivation was simple, playful, and unapologetically weeb: I wanted an anime desktop companion who lived on my machine, bantered like a friend, and actually had "hands" on the operating system.
+                    I heard about the OpenAI API, and that's when the idea clicked: I should build an assistant. But
+                    OpenAI was paid and required credit card billing, which was out of reach for a student with no
+                    disposable income. So I did some research and came across Google PaLM (which was launched as Bard,
+                    and later rebranded to Gemini), which was offering a free API service. I used that to experiment
+                    with what I could actually pull off and decided I wanted an assistant who lived on my machine,
+                    bantered like a friend, and actually had "hands" on the operating system.
                 </p>
 
                 <!-- Section 2 -->
                 <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
-                    2. How It All Started: Beyond College Viva Projects
+                    2. How It Began: Beyond Basic Voice Wrappers
                 </h2>
 
                 <p>
-                    When I first looked into building an assistant, searching YouTube tutorials was a massive disappointment. They were all the exact same shallow, copy-paste college projects built just to pass a viva exam and get marks from a professor: a basic Python script using <code>speech_recognition</code>, <code>pyttsx3</code>, and a chain of hardcoded <code>if "open youtube" in query: webbrowser.open()</code> statements. 
+                    When I first looked into assistant tutorials at the time, they were all essentially the same loop:
+                    accept voice input &rarr; fetch the OpenAI API &rarr; generate text &rarr; pass it to TTS and call
+                    it a day. Nothing else. There was zero interaction with the machine itself—no awareness of running
+                    processes, no terminal feedback, and no actual control over the computer.
                 </p>
 
                 <p>
-                    They were glorified toys made for grading rubrics rather than real engineering. I wanted something genuinely capable—an assistant that could touch low-level OS primitives, inspect running processes, intercept terminal output, and query physical hardware.
+                    I wanted something that didn't just talk, but actually had hands on the operating system. And so,
+                    the
+                    project started under the name <strong>AIMS</strong> which had a full form btw: <em>Artificial
+                        Intelligence Made From
+                        Scratch</em>. Crazy name for a simple PaLM API wrapper, right? Lmao.
                 </p>
-
                 <p>
-                    The project started under the name <strong>AIMS</strong> (<em>Artificial Intelligence Made From Scratch</em>). The initial prototype was admittedly naive: a Python script running against the PaLM API with a cheerful anime prompt, executing commands through crude substring matching:
+                    Anyways, the initial
+                    prototype was admittedly naive: a Python script running against the PaLM API with a cheerful anime
+                    persona, executing commands through crude substring matching:
                 </p>
 
                 <div
@@ -220,15 +226,23 @@ elif "debloat" in user_input.lower():
                 </div>
 
                 <p>
-                    The folder accumulated around twenty batch files: launching Genshin Impact, firing up Discord, running ADB commands to strip OEM bloatware from my phone, searching Wikipedia, or setting anime wallpapers.
+                    The folder accumulated around twenty batch files: launching Genshin Impact, firing up Discord,
+                    running ADB commands to strip OEM bloatware from my phone, searching Wikipedia, or setting anime
+                    wallpapers.
                 </p>
 
                 <p>
-                    It was rigid and brittle. If the phrasing changed slightly, the string match missed. But it proved a fundamental principle: language models didn't need to stay trapped in a browser tab. They could be wired directly into local executables.
+                    It was rigid and brittle. If the phrasing changed slightly, the string match missed. But it proved a
+                    fundamental principle: language models didn't need to stay trapped in a browser tab. They could be
+                    wired directly into local executables.
                 </p>
 
                 <p>
-                    Eventually, life got busy with college studies and other priorities, and the project sat paused on my drive for months. Later on, when modern LLM function calling arrived in model SDKs, I picked it back up. The project evolved into <strong>Aiko</strong>, rebuilt around direct Win32 integration instead of crude batch files, and was eventually refined and renamed to <strong>Kiko</strong> as the architecture matured.
+                    Eventually, life got busy with studies and other priorities, and the project sat paused on my drive
+                    for months. Later on, when modern LLM function calling arrived in model SDKs, I picked it back up.
+                    The project evolved into <strong>Aiko</strong>, rebuilt around direct Win32 integration instead of
+                    crude batch files, and was eventually refined and renamed to <strong>Kiko</strong> as the
+                    architecture matured.
                 </p>
 
                 <!-- Section 3 -->
@@ -237,11 +251,16 @@ elif "debloat" in user_input.lower():
                 </h2>
 
                 <p>
-                    I wanted Kiko to monitor my terminal in the background and roast me or explain errors whenever a command failed (like git merge conflicts or missing packages), without forcing me to launch a dedicated custom shell wrapper.
+                    I wanted Kiko to monitor my terminal in the background and roast me or explain errors whenever a
+                    command failed (like git merge conflicts or missing packages), without forcing me to launch a
+                    dedicated custom shell wrapper.
                 </p>
 
                 <p>
-                    My first attempt was creating a custom C++ console process that redirected standard input and output pipes. It failed miserably: standard pipe redirection completely broke interactive terminal features—tab completion died, cursor positioning glitched, and ANSI color sequences refused to render because it bypassed the Windows ConPTY subsystem.
+                    My first attempt was creating a custom C++ console process that redirected standard input and output
+                    pipes. It failed miserably: standard pipe redirection completely broke interactive terminal
+                    features—tab completion died, cursor positioning glitched, and ANSI color sequences refused to
+                    render because it bypassed the Windows ConPTY subsystem.
                 </p>
 
                 <p>
@@ -254,7 +273,9 @@ elif "debloat" in user_input.lower():
                 </div>
 
                 <p>
-                    By setting a <code class="text-xs font-mono">Debugger</code> string value pointing to my custom C++ injector (<code class="text-xs font-mono">injector.exe</code>), Windows was tricked into redirecting <em>every single invocation</em> of PowerShell across the entire operating system through my binary.
+                    By setting a <code class="text-xs font-mono">Debugger</code> string value pointing to my custom C++
+                    injector (<code class="text-xs font-mono">injector.exe</code>), Windows was tricked into redirecting
+                    <em>every single invocation</em> of PowerShell across the entire operating system through my binary.
                 </p>
 
                 <!-- Console Injection Dataflow ASCII -->
@@ -290,19 +311,41 @@ Console Output Stream
 
                 <ul class="list-disc list-inside space-y-2 text-sm pl-2">
                     <li>
-                        <strong>The Recursive IFEO Fork Bomb:</strong> When <code class="text-xs font-mono">injector.exe</code> called <code class="text-xs font-mono">CreateProcessW("powershell.exe")</code>, Windows tried to evaluate IFEO again, triggering an infinite recursive loop that froze the machine. The fix was passing <code class="text-xs font-mono">DEBUG_PROCESS | DEBUG_ONLY_THIS_PROCESS</code> flags—the Windows NT kernel explicitly skips IFEO evaluation if the process is being spawned under an active debugger.
+                        <strong>The Recursive IFEO Fork Bomb:</strong> When <code
+                            class="text-xs font-mono">injector.exe</code> called <code
+                            class="text-xs font-mono">CreateProcessW("powershell.exe")</code>, Windows tried to evaluate
+                        IFEO again, triggering an infinite recursive loop that froze the machine. The fix was passing
+                        <code class="text-xs font-mono">DEBUG_PROCESS | DEBUG_ONLY_THIS_PROCESS</code> flags—the Windows
+                        NT kernel explicitly skips IFEO evaluation if the process is being spawned under an active
+                        debugger.
                     </li>
                     <li>
-                        <strong>The IDE Terminal Crash Mystery:</strong> While Windows Terminal worked, launching PowerShell inside VS Code or modern IDEs caused the terminal pane to instantly crash and disappear. Modern IDEs use <code class="text-xs font-mono">node-pty</code>, which tracks the <em>exact child PID</em> spawned by <code class="text-xs font-mono">CreateProcess</code>. When my injector exited after 5ms, the IDE thought PowerShell died and tore down the pane. The injector had to be rewritten as a blocking, handle-inheriting lifecycle proxy (<code class="text-xs font-mono">bInheritHandles = TRUE</code>, <code class="text-xs font-mono">WaitForSingleObject</code>).
+                        <strong>The IDE Terminal Crash Mystery:</strong> While Windows Terminal worked, launching
+                        PowerShell inside VS Code or modern IDEs caused the terminal pane to instantly crash and
+                        disappear. Modern IDEs use <code class="text-xs font-mono">node-pty</code>, which tracks the
+                        <em>exact child PID</em> spawned by <code class="text-xs font-mono">CreateProcess</code>. When
+                        my injector exited after 5ms, the IDE thought PowerShell died and tore down the pane. The
+                        injector had to be rewritten as a blocking, handle-inheriting lifecycle proxy (<code
+                            class="text-xs font-mono">bInheritHandles = TRUE</code>, <code
+                            class="text-xs font-mono">WaitForSingleObject</code>).
                     </li>
                 </ul>
 
                 <p>
-                    Once PowerShell spawned cleanly, the injector allocated remote memory (<code class="text-xs font-mono">VirtualAllocEx</code>), injected a DLL (<code class="text-xs font-mono">hook.dll</code>) via <code class="text-xs font-mono">CreateRemoteThread</code>, and hooked <code class="text-xs font-mono">WriteConsoleW</code>.
+                    Once PowerShell spawned cleanly, the injector allocated remote memory (<code
+                        class="text-xs font-mono">VirtualAllocEx</code>), injected a DLL (<code
+                        class="text-xs font-mono">hook.dll</code>) via <code
+                        class="text-xs font-mono">CreateRemoteThread</code>, and hooked <code
+                        class="text-xs font-mono">WriteConsoleW</code>.
                 </p>
 
                 <p>
-                    Here lay another trap: on 64-bit Windows, <code class="text-xs font-mono">kernel32.dll!WriteConsoleW</code> is merely a 6-byte forwarder stub pointing into <code class="text-xs font-mono">kernelbase.dll</code>. Overwriting 14 bytes there corrupts adjacent memory pages and causes instant access violations. The hook had to resolve the address directly inside <code class="text-xs font-mono">kernelbase.dll!WriteConsoleW</code>, overwriting the function prologue with an absolute 14-byte 64-bit indirect jump:
+                    Here lay another trap: on 64-bit Windows, <code
+                        class="text-xs font-mono">kernel32.dll!WriteConsoleW</code> is merely a 6-byte forwarder stub
+                    pointing into <code class="text-xs font-mono">kernelbase.dll</code>. Overwriting 14 bytes there
+                    corrupts adjacent memory pages and causes instant access violations. The hook had to resolve the
+                    address directly inside <code class="text-xs font-mono">kernelbase.dll!WriteConsoleW</code>,
+                    overwriting the function prologue with an absolute 14-byte 64-bit indirect jump:
                 </p>
 
                 <!-- Assembly Trampoline Memory Layout -->
@@ -324,7 +367,16 @@ Address             Bytes                  Disassembly
                 </div>
 
                 <p>
-                    Because modern console output is heavily multithreaded (background threads spit out ANSI shell integration sequences while the main thread prints commands), the hook wraps calls in a <code class="text-xs font-mono">CRITICAL_SECTION</code> and immediately flushes instruction caches across all CPU cores using <code class="text-xs font-mono">FlushInstructionCache(GetCurrentProcess(), targetFunc, 14)</code>. When an error signature (like <code class="text-xs font-mono">FullyQualifiedErrorId</code>) appears in the rolling buffer, the hook pauses execution, sends the error packet over loopback UDP to the assistant, and injects commentary directly into the console in bright 24-bit ANSI pink (<code class="text-xs font-mono">\x1b[38;2;255;105;180m</code>) before the user ever sees the next prompt.
+                    Because modern console output is heavily multithreaded (background threads spit out ANSI shell
+                    integration sequences while the main thread prints commands), the hook wraps calls in a <code
+                        class="text-xs font-mono">CRITICAL_SECTION</code> and immediately flushes instruction caches
+                    across all CPU cores using <code
+                        class="text-xs font-mono">FlushInstructionCache(GetCurrentProcess(), targetFunc, 14)</code>.
+                    When an error signature (like <code class="text-xs font-mono">FullyQualifiedErrorId</code>) appears
+                    in the rolling buffer, the hook pauses execution, sends the error packet over loopback UDP to the
+                    assistant, and injects commentary directly into the console in bright 24-bit ANSI pink (<code
+                        class="text-xs font-mono">\x1b[38;2;255;105;180m</code>) before the user ever sees the next
+                    prompt.
                 </p>
 
                 <!-- Section 4 -->
@@ -333,22 +385,39 @@ Address             Bytes                  Disassembly
                 </h2>
 
                 <p>
-                    A desktop assistant needs to find files instantly. Using Python's standard <code class="text-xs font-mono">os.walk()</code> took anywhere from 40 to 90 seconds across multi-terabyte drives because it issues thousands of individual <code class="text-xs font-mono">FindFirstFileW</code> / <code class="text-xs font-mono">FindNextFileW</code> system calls. Meanwhile, the Windows Search Indexing service was permanently disabled on my LTSC installation to eliminate background disk thrashing and preserve SSD health.
+                    A desktop assistant needs to find files instantly. Using Python's standard <code
+                        class="text-xs font-mono">os.walk()</code> took anywhere from 40 to 90 seconds across
+                    multi-terabyte drives because it issues thousands of individual <code
+                        class="text-xs font-mono">FindFirstFileW</code> / <code
+                        class="text-xs font-mono">FindNextFileW</code> system calls. Meanwhile, the Windows Search
+                    Indexing service was permanently disabled on my LTSC installation to eliminate background disk
+                    thrashing and preserve SSD health.
                 </p>
 
                 <p>
-                    Instead of asking the operating system to traverse directory trees recursively, I bypassed the Win32 filesystem driver entirely:
+                    Instead of asking the operating system to traverse directory trees recursively, I bypassed the Win32
+                    filesystem driver entirely:
                 </p>
 
                 <ul class="list-disc list-inside space-y-1 text-sm pl-2">
-                    <li>Opened raw physical volume handles (<code class="text-xs font-mono">\\.\C:</code>, <code class="text-xs font-mono">\\.\D:</code>) with administrator privileges (<code class="text-xs font-mono">GENERIC_READ | GENERIC_WRITE</code>).</li>
-                    <li>Issued the low-level I/O control code <code class="text-xs font-mono">FSCTL_GET_NTFS_VOLUME_DATA</code> to deduce cluster geometry and verify the filesystem state.</li>
-                    <li>Streamed Master File Table records directly from disk using <code class="text-xs font-mono">FSCTL_ENUM_USN_DATA</code> (NTFS Update Sequence Number Change Journal) in large contiguous memory buffers.</li>
-                    <li>Converted raw 64-bit File Reference Numbers (FRNs) into absolute filesystem paths using <code class="text-xs font-mono">OpenFileById</code> with <code class="text-xs font-mono">FILE_FLAG_BACKUP_SEMANTICS</code> and <code class="text-xs font-mono">GetFinalPathNameByHandleW</code>.</li>
+                    <li>Opened raw physical volume handles (<code class="text-xs font-mono">\\.\C:</code>, <code
+                            class="text-xs font-mono">\\.\D:</code>) with administrator privileges (<code
+                            class="text-xs font-mono">GENERIC_READ | GENERIC_WRITE</code>).</li>
+                    <li>Issued the low-level I/O control code <code
+                            class="text-xs font-mono">FSCTL_GET_NTFS_VOLUME_DATA</code> to deduce cluster geometry and
+                        verify the filesystem state.</li>
+                    <li>Streamed Master File Table records directly from disk using <code
+                            class="text-xs font-mono">FSCTL_ENUM_USN_DATA</code> (NTFS Update Sequence Number Change
+                        Journal) in large contiguous memory buffers.</li>
+                    <li>Converted raw 64-bit File Reference Numbers (FRNs) into absolute filesystem paths using <code
+                            class="text-xs font-mono">OpenFileById</code> with <code
+                            class="text-xs font-mono">FILE_FLAG_BACKUP_SEMANTICS</code> and <code
+                            class="text-xs font-mono">GetFinalPathNameByHandleW</code>.</li>
                 </ul>
 
                 <p>
-                    The C++ scanner splits queries into lowercase tokens and streams through millions of records in memory, locating files across a 1TB NVMe SSD in approximately <strong>800 milliseconds</strong>.
+                    The C++ scanner splits queries into lowercase tokens and streams through millions of records in
+                    memory, locating files across a 1TB NVMe SSD in approximately <strong>800 milliseconds</strong>.
                 </p>
 
                 <!-- Section 5 -->
@@ -357,7 +426,10 @@ Address             Bytes                  Disassembly
                 </h2>
 
                 <p>
-                    Standard user-mode WMI thermal queries (<code class="text-xs font-mono">MSApi_ThermalZoneTemperature</code>) return static dummy values or fail completely on gaming laptop motherboards because thermal diodes route through proprietary vendor Embedded Controller (EC) chips rather than standard ACPI tables.
+                    Standard user-mode WMI thermal queries (<code
+                        class="text-xs font-mono">MSApi_ThermalZoneTemperature</code>) return static dummy values or
+                    fail completely on gaming laptop motherboards because thermal diodes route through proprietary
+                    vendor Embedded Controller (EC) chips rather than standard ACPI tables.
                 </p>
 
                 <p>
@@ -365,9 +437,13 @@ Address             Bytes                  Disassembly
                 </p>
 
                 <ul class="list-disc list-inside space-y-1 text-sm pl-2">
-                    <li>Built a persistent C++ background daemon (<code class="text-xs font-mono">cpu_monitor.exe</code>).</li>
-                    <li>Dynamically loaded AMD's official SDK (<code class="text-xs font-mono">Platform.dll</code>) to issue IOCTL control codes to <code class="text-xs font-mono">AMDRyzenMasterDriver.sys</code>—a trusted, signed Ring-0 kernel driver.</li>
-                    <li>The driver speaks directly over the hardware bus with the <strong>System Management Unit (SMU)</strong> on the silicon, reading internal CPU junction diodes.</li>
+                    <li>Built a persistent C++ background daemon (<code
+                            class="text-xs font-mono">cpu_monitor.exe</code>).</li>
+                    <li>Dynamically loaded AMD's official SDK (<code class="text-xs font-mono">Platform.dll</code>) to
+                        issue IOCTL control codes to <code class="text-xs font-mono">AMDRyzenMasterDriver.sys</code>—a
+                        trusted, signed Ring-0 kernel driver.</li>
+                    <li>The driver speaks directly over the hardware bus with the <strong>System Management Unit
+                            (SMU)</strong> on the silicon, reading internal CPU junction diodes.</li>
                 </ul>
 
                 <!-- Shared Memory Telemetry ASCII -->
@@ -391,55 +467,389 @@ Named Win32 Shared Memory: "Local\KikoRyzenTelemetry" (CreateFileMapping)
                 </div>
 
                 <p>
-                    Cold-booting a driver session takes hundreds of milliseconds. To eliminate latency during chat evaluation, the daemon runs continuously, polling every 3000ms and dumping temperatures into a named Win32 shared memory block (<code class="text-xs font-mono">CreateFileMapping</code>). Python's <code class="text-xs font-mono">mmap</code> module reads the junction temperature with zero CPU overhead. An independent background observer thread continuously monitors this shared memory and paints an emergency GDI overlay on screen if thermal thresholds are breached.
+                    Cold-booting a driver session takes hundreds of milliseconds. To eliminate latency during chat
+                    evaluation, the daemon runs continuously, polling every 3000ms and dumping temperatures into a named
+                    Win32 shared memory block (<code class="text-xs font-mono">CreateFileMapping</code>). Python's <code
+                        class="text-xs font-mono">mmap</code> module reads the junction temperature with zero CPU
+                    overhead. An independent background observer thread continuously monitors this shared memory and
+                    paints an emergency GDI overlay on screen if thermal thresholds are breached.
                 </p>
 
                 <!-- Section 6 -->
                 <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
-                    6. The Dead Ends: Discord Process Memory and the 4GB VRAM Wall
+                    6. Desktop Perception: Crawling the DWM Z-Order Stack
                 </h2>
 
                 <p>
-                    Genuine tinkering inevitably hits brick walls, and documenting what failed is just as valuable as what worked:
+                    One of the features I wanted was for Kiko to understand what I was actively coding or looking at
+                    without me having to copy-paste code or take manual screenshots. If I asked <em>"why is this
+                        function crashing?"</em>, she should just know.
+                </p>
+
+                <p>
+                    The immediate problem with running an assistant from a terminal interface is that calling the
+                    standard Win32 <code class="text-xs font-mono">GetForegroundWindow()</code> is useless: the
+                    foreground window is literally the terminal process executing the assistant itself.
+                </p>
+
+                <p>
+                    To figure out what application I was actually using right before invoking the prompt, Kiko drops
+                    into <code class="text-xs font-mono">user32.dll</code> via Python <code
+                        class="text-xs font-mono">ctypes</code> and walks directly down the Desktop Window Manager (DWM)
+                    visual Z-order stack:
+                </p>
+
+                <div
+                    class="p-4 rounded-xl bg-gray-100 dark:bg-gray-800/60 font-mono text-xs overflow-x-auto text-gray-800 dark:text-gray-200">
+                    <pre><code># Traversing down the DWM Z-order stack via user32.dll
+hwnd = user32.GetForegroundWindow()
+
+# Walk down the visual hierarchy to identify the target application
+while hwnd:
+    hwnd = user32.GetWindow(hwnd, GW_HWNDNEXT)
+    
+    # Ignore minimized windows and bare desktop shells
+    if user32.IsIconic(hwnd):
+        continue
+        
+    class_name = get_window_class_name(hwnd)
+    if class_name in ("Progman", "WorkerW"):
+        continue
+
+    # Skip the executing terminal wrapper process
+    pid = get_window_pid(hwnd)
+    if pid != terminal_pid:
+        target_hwnd = hwnd
+        break</code></pre>
+                </div>
+
+                <p>
+                    By skipping minimized windows (<code class="text-xs font-mono">IsIconic</code>), ignoring the
+                    background desktop shells (<code class="text-xs font-mono">Progman</code>, <code
+                        class="text-xs font-mono">WorkerW</code>), and filtering out the terminal PID, the traversal
+                    lands squarely on the topmost visible application underneath.
+                </p>
+
+                <p>
+                    From there, extracting the window title reveals the context—for instance, VS Code's title exposes
+                    the active file path (<code class="text-xs font-mono">filename.py - Project - Visual Studio Code</code>).
+                    Kiko pairs that title with local workspace paths, reads the raw bytes directly off disk, and loads
+                    the active code context straight into the prompt.
+                </p>
+
+                <!-- Section 7 -->
+                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
+                    7. Background Audio: WinRT System Media Transport Controls
+                </h2>
+
+                <p>
+                    Most virtual assistant tutorials control music through simulated keypresses: synthesizing virtual
+                    <code class="text-xs font-mono">VK_MEDIA_PLAY_PAUSE</code> keystrokes through <code
+                        class="text-xs font-mono">keybd_event</code> or <code class="text-xs font-mono">SendInput</code>.
+                </p>
+
+                <p>
+                    Virtual keystrokes are completely blind. They can't report the current track title, they can't tell
+                    whether music is currently playing or paused, and they can't target a specific app. If a web
+                    browser plays a YouTube video or an ad in the background, it hijacks the global media hook, meaning
+                    your simulated keystroke ends up pausing a browser tab instead of your music player.
+                </p>
+
+                <p>
+                    Windows 10 and 11 route native media sessions through the asynchronous Windows Runtime (<code
+                        class="text-xs font-mono">WinRT</code>) under <code
+                        class="text-xs font-mono">Windows.Media.Control</code>. Using the Python <code
+                        class="text-xs font-mono">winsdk</code> projection, Kiko requests the session manager directly:
+                </p>
+
+                <div
+                    class="p-4 rounded-xl bg-gray-100 dark:bg-gray-800/60 font-mono text-xs overflow-x-auto text-gray-800 dark:text-gray-200">
+                    <pre><code>from winsdk.windows.media.control import GlobalSystemMediaTransportControlsSessionManager as SMTC
+
+manager = await SMTC.request_async()
+sessions = manager.get_sessions()
+
+# Iterate all background sessions instead of trusting the active one
+for session in sessions:
+    app_id = session.source_app_user_model_id.lower()
+    if "spotify" in app_id or "music" in app_id:
+        await session.try_toggle_play_pause_operation_async()
+        break</code></pre>
+                </div>
+
+                <p>
+                    Calling <code class="text-xs font-mono">manager.get_sessions()</code> allows iterating over all
+                    active, background, and suspended sessions. By inspecting the <code
+                        class="text-xs font-mono">source_app_user_model_id</code>, transport commands (<code
+                        class="text-xs font-mono">try_toggle_play_pause_operation_async()</code>, <code
+                        class="text-xs font-mono">try_skip_next_async()</code>) can be routed to the actual media player
+                    even when Chrome or Firefox is dominating the foreground audio session.
+                </p>
+
+                <p>
+                    I integrated the official Spotify Web API later on for catalog searching, custom playlist
+                    generation, and hardware device transfers, but I kept this native WinRT SMTC hook in place because
+                    it controls any local media player or background audio without needing internet access or API
+                    tokens.
+                </p>
+
+                <!-- Section 8 -->
+                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
+                    8. Clean Process Spawning: Registry Scraping and Detached Handles
+                </h2>
+
+                <p>
+                    Asking an assistant to launch an application seems simple until you try executing shell commands
+                    like <code class="text-xs font-mono">start &lt;app&gt;</code>. If an executable isn't registered in
+                    the system <code class="text-xs font-mono">PATH</code>, Windows triggers an annoying modal GUI error
+                    dialog (<em>"Windows cannot find..."</em>).
+                </p>
+
+                <p>
+                    To resolve installed applications dynamically without hardcoding paths or throwing UI errors, Kiko
+                    crawls the Windows Registry uninstall hives:
+                </p>
+
+                <div
+                    class="p-4 rounded-xl bg-gray-100 dark:bg-gray-800/60 font-mono text-xs overflow-x-auto text-gray-800 dark:text-gray-200">
+                    <pre><code># Registry targets for installed software
+HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall
+HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall
+HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall</code></pre>
+                </div>
+
+                <p>
+                    Iterating through these registry subkeys allows reading <code
+                        class="text-xs font-mono">DisplayName</code>, <code
+                        class="text-xs font-mono">InstallLocation</code>, and <code
+                        class="text-xs font-mono">DisplayIcon</code> values. The binary's physical disk path is
+                    extracted cleanly, verifying its existence before attempting execution.
+                </p>
+
+                <p>
+                    There was another subtle Win32 trap: if a Python process spawns a GUI application using standard
+                    <code class="text-xs font-mono">subprocess.Popen</code>, the child process inherits the parent
+                    console's standard input and output handles by default. If the parent terminal closes or expects
+                    standard streams to flush, the inherited handles can deadlock or freeze the terminal session.
+                </p>
+
+                <p>
+                    The fix was passing the Win32 creation flag <code
+                        class="text-xs font-mono">DETACHED_PROCESS</code> (<code
+                        class="text-xs font-mono">0x00000008</code>) into the process creation flags:
+                </p>
+
+                <div
+                    class="p-4 rounded-xl bg-gray-100 dark:bg-gray-800/60 font-mono text-xs overflow-x-auto text-gray-800 dark:text-gray-200">
+                    <pre><code># Spawning completely detached GUI processes
+DETACHED_PROCESS = 0x00000008
+subprocess.Popen(
+    [resolved_exe_path],
+    creationflags=DETACHED_PROCESS,
+    close_fds=True
+)</code></pre>
+                </div>
+
+                <p>
+                    This severs handle inheritance completely, allowing games, editors, and tools to spawn independently
+                    without locking up the running assistant or tying themselves to the terminal lifecycle.
+                </p>
+
+                <!-- Section 9 -->
+                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
+                    9. Bluetooth Radio Control: Forcing Audio Sink Services via Win32
+                </h2>
+
+                <p>
+                    The modern Windows Settings Bluetooth panel is notoriously clunky and slow. Reconnecting paired
+                    Bluetooth headphones after stepping away often requires opening Settings, waiting for devices to
+                    refresh, and clicking connect multiple times.
+                </p>
+
+                <p>
+                    I wanted Kiko to connect or disconnect paired devices instantly via voice or chat. The Windows
+                    Bluetooth APIs (<code class="text-xs font-mono">bluetoothapis.h</code> via <code
+                        class="text-xs font-mono">Bthprops.lib</code>) require packed memory structures like <code
+                        class="text-xs font-mono">BLUETOOTH_DEVICE_SEARCH_PARAMS</code> and <code
+                        class="text-xs font-mono">BLUETOOTH_DEVICE_INFO</code>. Recreating these structures manually in
+                    Python via <code class="text-xs font-mono">ctypes</code> is brittle and error-prone, so I dropped down
+                    to a compact native C++ helper (<code class="text-xs font-mono">bt_manager.exe</code>) to let the
+                    compiler handle binary struct alignment cleanly.
+                </p>
+
+                <p>
+                    Enumerating paired hardware was straightforward using <code
+                        class="text-xs font-mono">BluetoothFindFirstDevice</code> and <code
+                        class="text-xs font-mono">BluetoothFindNextDevice</code>. But the real challenge was forcing an
+                    audio connection without relying on GUI clicks.
+                </p>
+
+                <p>
+                    The trick was interacting directly with Bluetooth services. Bluetooth audio devices (headphones and
+                    speakers) rely on the Advanced Audio Distribution Profile (A2DP), designated by the standard Audio
+                    Sink Service Class GUID:
+                </p>
+
+                <div
+                    class="p-4 rounded-xl bg-gray-100 dark:bg-gray-800/60 font-mono text-xs overflow-x-auto text-gray-800 dark:text-gray-200">
+                    <pre><code>// The Audio Sink Service Class GUID for Bluetooth headphones
+// {0000110B-0000-1000-8000-00805F9B34FB}
+const GUID GUID_AUDIO_SINK = { 
+    0x0000110b, 0x0000, 0x1000, 
+    { 0x80, 0x00, 0x00, 0x80, 0x5f, 0x9b, 0x34, 0xfb } 
+};
+
+// Forcefully assert the Audio Sink service state on the device
+DWORD result = BluetoothSetServiceState(
+    hRadio, 
+    &amp;device_info, 
+    &amp;GUID_AUDIO_SINK, 
+    BLUETOOTH_SERVICE_ENABLE
+);</code></pre>
+                </div>
+
+                <p>
+                    Calling <code class="text-xs font-mono">BluetoothSetServiceState</code> with <code
+                        class="text-xs font-mono">BLUETOOTH_SERVICE_ENABLE</code> forces the Windows Bluetooth kernel
+                    stack to immediately assert the A2DP profile on the target device, establishing the audio link
+                    instantly. Passing <code class="text-xs font-mono">BLUETOOTH_SERVICE_DISABLE</code> tears down the
+                    link on demand—bypassing the Windows Settings app entirely.
+                </p>
+
+                <!-- Section 10 -->
+                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
+                    10. Dynamic Privacy: Bypassing the camsvc ConsentStore
+                </h2>
+
+                <p>
+                    When checking local weather conditions, Kiko needs geolocation coordinates. If Windows Location
+                    permissions are disabled in system settings, an assistant usually just errors out or tells you to
+                    manually open Settings. Similarly, I wanted a global privacy killswitch: being able to tell Kiko
+                    <em>"turn off my microphone and webcam right now"</em> and having the operating system enforce it
+                    immediately.
+                </p>
+
+                <p>
+                    Official Windows Runtime permission APIs (<code
+                        class="text-xs font-mono">AppCapability::RequestAccessAsync</code>) only allow a process to
+                    request access for <em>itself</em>. Microsoft does not provide a public API for third-party software
+                    to globally flip master privacy toggles for the entire operating system.
+                </p>
+
+                <p>
+                    Looking into Windows internals, privacy capabilities (Location, Webcam, Microphone) are enforced at
+                    the service level by the <strong>Capability Access Manager Service</strong> (<code
+                        class="text-xs font-mono">camsvc</code>). And <code class="text-xs font-mono">camsvc</code>
+                    reads its policies directly from the <code class="text-xs font-mono">ConsentStore</code> registry
+                    keys:
+                </p>
+
+                <div
+                    class="p-4 rounded-xl bg-gray-100 dark:bg-gray-800/60 font-mono text-xs overflow-x-auto text-gray-800 dark:text-gray-200">
+                    <pre><code>HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\&lt;capability&gt;\Value
+HKCU\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\&lt;capability&gt;\Value</code></pre>
+                </div>
+
+                <p>
+                    I could have written a C++ binary to alter these keys, but that would have just been a redundant
+                    wrapper around <code class="text-xs font-mono">RegOpenKeyEx</code> and <code
+                        class="text-xs font-mono">RegSetValueEx</code>. Python's built-in <code
+                        class="text-xs font-mono">winreg</code> module hits the exact same configuration store natively
+                    with zero compilation overhead:
+                </p>
+
+                <div
+                    class="p-4 rounded-xl bg-gray-100 dark:bg-gray-800/60 font-mono text-xs overflow-x-auto text-gray-800 dark:text-gray-200">
+                    <pre><code>import winreg
+
+def set_master_capability(capability: str, allow: bool):
+    value_str = "Allow" if allow else "Deny"
+    path = rf"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\{capability}"
+    
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, path, 0, winreg.KEY_SET_VALUE) as key:
+        winreg.SetValueEx(key, "Value", 0, winreg.REG_SZ, value_str)</code></pre>
+                </div>
+
+                <p>
+                    By flipping the <code class="text-xs font-mono">Value</code> string between <code
+                        class="text-xs font-mono">"Allow"</code> and <code class="text-xs font-mono">"Deny"</code>,
+                    Kiko can temporarily unlock Windows Location to grab real-time coordinates for weather forecasts
+                    and immediately lock the capability back down, or act as an instant master killswitch for hardware
+                    sensors.
+                </p>
+
+                <!-- Section 11 -->
+                <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
+                    11. The Dead Ends: Discord Process Memory and the 4GB VRAM Wall
+                </h2>
+
+                <p>
+                    Genuine tinkering inevitably hits brick walls, and documenting what failed is just as valuable as
+                    what worked:
                 </p>
 
                 <div class="space-y-4">
-                    <div class="p-5 rounded-2xl bg-white dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 space-y-2 text-sm">
-                        <h3 class="font-bold text-gray-900 dark:text-white text-base">Direct Memory Ripping for Discord</h3>
+                    <div
+                        class="p-5 rounded-2xl bg-white dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 space-y-2 text-sm">
+                        <h3 class="font-bold text-gray-900 dark:text-white text-base">Direct Memory Ripping for Discord
+                        </h3>
                         <p>
-                            Scraping Discord via OCR is slow. I wrote a native C++ scanner (<code class="text-xs font-mono">VirtualQueryEx</code> + <code class="text-xs font-mono">ReadProcessMemory</code>) to sweep all read-write memory pages of <code class="text-xs font-mono">discord.exe</code>, piping 50MB memory dumps into CUDA 12.4 PyTorch and FAISS on my GPU.
+                            Scraping Discord via OCR is slow. I wrote a native C++ scanner (<code
+                                class="text-xs font-mono">VirtualQueryEx</code> + <code
+                                class="text-xs font-mono">ReadProcessMemory</code>) to sweep read-write memory pages of
+                            <code class="text-xs font-mono">discord.exe</code>. I tried to solve the problem by using RAG
+                            once the data was out of RAM and performing similarity search on it.
                         </p>
                         <p>
-                            It shattered against Chromium's architecture: Discord dynamically shards its V8 JavaScript heap across 15+ undocumented child renderer processes. The active chat DOM does not reside in the parent process, and hunting dynamic V8 string fragments through garbage-collected memory proved too fragile for daily use.
+                            This actually "worked"—the pipeline could ingest chunks and match relevant messages—but not every
+                            time. Chromium and Electron-based applications still suffered: their architecture dynamically
+                            shards the V8 JavaScript heap across 15+ undocumented child renderer processes. The active chat DOM
+                            didn't reliably reside in the primary process, and hunting dynamic V8 string fragments through
+                            constantly garbage-collected memory proved too fragile for daily use.
                         </p>
                     </div>
 
-                    <div class="p-5 rounded-2xl bg-white dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 space-y-2 text-sm">
-                        <h3 class="font-bold text-gray-900 dark:text-white text-base">The Proactive Companion &amp; The 4GB VRAM Barrier</h3>
+                    <div
+                        class="p-5 rounded-2xl bg-white dark:bg-gray-800/40 border border-gray-200 dark:border-gray-800 space-y-2 text-sm">
+                        <h3 class="font-bold text-gray-900 dark:text-white text-base">The Proactive Companion &amp; The
+                            4GB VRAM Barrier</h3>
                         <p>
-                            I wanted the assistant to sit silently in the background, watch screen events via <code class="text-xs font-mono">SetWinEventHook</code>, and use a small local model (Llama 3 8B via Ollama) to decide when to interject spontaneously.
+                            I wanted the assistant to sit silently in the background, watch screen events via <code
+                                class="text-xs font-mono">SetWinEventHook</code>, and use a small local model (Llama 3
+                            8B via Ollama) to decide when to interject spontaneously.
                         </p>
                         <p>
-                            This crashed headfirst into my hardware limits. The mobile RTX 3050 has only 4GB of VRAM. Running Ollama locally consumed 3.5GB to 3.8GB of video memory. The moment I launched Genshin Impact or a 3D game, the GPU entered violent VRAM paging across the PCIe bus, collapsing frame rates from 60 FPS down to an unplayable 4 FPS slide show. Respecting physical hardware meant pausing the feature until higher-VRAM silicon arrives.
+                            This crashed headfirst into my hardware limits. The mobile RTX 3050 has only 4GB of VRAM.
+                            Running Ollama locally consumed 3.5GB to 3.8GB of video memory. The moment I launched
+                            Genshin Impact or a 3D game, the GPU entered violent VRAM paging across the PCIe bus,
+                            collapsing frame rates from 60 FPS down to an unplayable 4 FPS slide show. Respecting
+                            physical hardware meant pausing the feature until higher-VRAM silicon arrives.
                         </p>
                     </div>
                 </div>
 
-                <!-- Section 7 -->
+                <!-- Section 12 -->
                 <h2 class="font-syne text-xl sm:text-2xl font-bold text-gray-900 dark:text-white pt-4">
-                    7. Looking Back: Computing as a Personal Playground
+                    12. Looking Back: Computing as a Personal Playground
                 </h2>
 
                 <p>
-                    At first glance, an "AI desktop assistant" sounds like the most generic project imaginable: an API key, a prompt, and a UI window.
+                    At first glance, an "AI desktop assistant" sounds like the most generic project imaginable: an API
+                    key, a prompt, and a UI window.
                 </p>
 
                 <p>
-                    In reality, software is defined by its mechanisms, not marketing hype or college viva grading rubrics. Building Kiko wasn't about entering a hackathon, raising venture funding, or optimizing my productivity for an employer. It was about taking an emerging technology and using it as a vehicle to explore assembly detours, kernel driver IOCTLs, raw disk structures, and Windows subsystems that are usually hidden behind layers of abstraction.
+                    In reality, software is defined by its mechanisms, not marketing hype or college viva grading
+                    rubrics. Building Kiko wasn't about entering a hackathon, raising venture funding, or optimizing my
+                    productivity for an employer. It was about taking an emerging technology and using it as a vehicle
+                    to explore assembly detours, kernel driver IOCTLs, raw disk structures, and Windows subsystems that
+                    are usually hidden behind layers of abstraction.
                 </p>
 
                 <p>
-                    Personal computing should remain an intellectual pursuit driven by curiosity and craftsmanship. Sometimes, the most rewarding project you can build is simply one made for yourself, on your own hardware, just to see how the system actually works.
+                    Personal computing should remain an intellectual pursuit driven by curiosity and craftsmanship.
+                    Sometimes, the most rewarding project you can build is simply one made for yourself, on your own
+                    hardware, just to see how the system actually works.
                 </p>
 
                 <!-- Post Navigation -->
